@@ -96,7 +96,7 @@ services:
         condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      JETSTREAM_URL: "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post,app.bsky.feed.like,app.bsky.graph.follow"
+      JETSTREAM_URL: "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post&wantedCollections=app.bsky.feed.like&wantedCollections=app.bsky.graph.follow"
       RECONNECT_DELAY: "5"
       BLUESKY_HANDLE: ${BLUESKY_HANDLE:-}
       BLUESKY_PASSWORD: ${BLUESKY_PASSWORD:-}
