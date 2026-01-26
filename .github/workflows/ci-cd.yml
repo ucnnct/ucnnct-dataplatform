@@ -49,9 +49,9 @@ jobs:
     outputs:
       collectors: ${{ steps.set-matrix.outputs.collectors }}
       consumers: ${{ steps.set-matrix.outputs.consumers }}
-      loki: ${{ steps.filter.outputs.loki }}
-      brogy: ${{ steps.filter.outputs.brogy }}
-      saul: ${{ steps.filter.outputs.saul }}
+      loki: ${{ steps.set-matrix.outputs.loki }}
+      brogy: ${{ steps.set-matrix.outputs.brogy }}
+      saul: ${{ steps.set-matrix.outputs.saul }}
 
     steps:
       - uses: actions/checkout@v4
@@ -102,6 +102,9 @@ jobs:
           if [[ "$force" == "true" ]]; then
             echo "collectors=$(jq -cn '$ARGS.positional' --args bluesky nostr hackernews rss stackoverflow)" >> $GITHUB_OUTPUT
             echo "consumers=$(jq -cn '$ARGS.positional' --args)" >> $GITHUB_OUTPUT
+            echo "loki=true"  >> $GITHUB_OUTPUT
+            echo "brogy=false" >> $GITHUB_OUTPUT
+            echo "saul=false"  >> $GITHUB_OUTPUT
           else
             collectors=()
             [[ "${{ steps.filter.outputs.col_bluesky }}"      == "true" ]] && collectors+=("bluesky")
@@ -119,6 +122,9 @@ jobs:
 
             echo "collectors=$(jq -cn '$ARGS.positional' --args "${collectors[@]}")" >> $GITHUB_OUTPUT
             echo "consumers=$(jq -cn '$ARGS.positional' --args "${consumers[@]}")" >> $GITHUB_OUTPUT
+            echo "loki=${{ steps.filter.outputs.loki }}"   >> $GITHUB_OUTPUT
+            echo "brogy=${{ steps.filter.outputs.brogy }}" >> $GITHUB_OUTPUT
+            echo "saul=${{ steps.filter.outputs.saul }}"   >> $GITHUB_OUTPUT
           fi
 
   build-collectors:
