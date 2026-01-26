@@ -1,0 +1,342 @@
+version: '3.8'
+
+services:
+
+  # ═══════════════════════════════
+  # KAFKA KRaft 
+  # ═══════════════════════════════
+  kafka:
+    image: apache/kafka:latest
+    container_name: uconnect-kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  kafka-init:
+    image: apache/kafka:latest
+    container_name: uconnect-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - uconnect-net
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        for topic in uconnect.datalake.raw.bluesky uconnect.datalake.raw.nostr uconnect.datalake.raw.hackernews uconnect.datalake.raw.stackoverflow uconnect.datalake.raw.rss; do
+          /opt/kafka/bin/kafka-topics.sh \
+            --create --if-not-exists \
+            --bootstrap-server kafka:9092 \
+            --topic $$topic \
+            --partitions 3 \
+            --replication-factor 1 \
+            --config retention.ms=172800000
+        done
+        echo "Topics Kafka crees (retention 2 jours)."
+    restart: on-failure
+
+  # ═══════════════════════════════
+  # REDIS (déduplication)
+  # ═══════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: uconnect-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════════════════════════
+  # MINIO (Object Store)
+  # ═══════════════════════════════
+  minio:
+    image: minio/minio:latest
+    container_name: uconnect-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"      # Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: uconnect-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - uconnect-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+        mc mb --ignore-existing local/raw
+        mc mb --ignore-existing local/curated
+        echo "Buckets MinIO crees."
+    restart: on-failure
+
+  # ═══════════════════════════════
+  # POSTGRESQL (staging + datamart)
+  # ═══════════════════════════════
+  postgres:
+    image: postgres:15
+    container_name: uconnect-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════════════════════════
+  # SPARK (Master + 2 Workers)
+  # ═══════════════════════════════
+  spark-master:
+    image: apache/spark:latest
+    container_name: uconnect-spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"   # Spark UI
+      - "7077:7077"   # Spark Master port
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    networks:
+      - uconnect-net
+
+  spark-worker-1:
+    image: apache/spark:latest
+    container_name: uconnect-spark-worker-1
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_WORKER_MEMORY: 4G
+      SPARK_WORKER_CORES: 2
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    networks:
+      - uconnect-net
+
+  spark-worker-2:
+    image: apache/spark:latest
+    container_name: uconnect-spark-worker-2
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_WORKER_MEMORY: 4G
+      SPARK_WORKER_CORES: 2
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    networks:
+      - uconnect-net
+
+  # ═══════════════════════════════
+  # AIRFLOW (orchestration)
+  # ═══════════════════════════════
+  airflow:
+    image: apache/airflow:2.9.0
+    container_name: uconnect-airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8080"   # Airflow UI
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    volumes:
+      - ./infra/airflow/dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+    command: standalone
+    networks:
+      - uconnect-net
+
+  # ═══════════════════════════════
+  # SUPERSET (visualisation)
+  # ═══════════════════════════════
+  superset:
+    image: apache/superset:latest
+    container_name: uconnect-superset
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8088"   # Superset UI
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - superset-data:/app/superset_home
+      - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py
+    networks:
+      - uconnect-net
+
+# ═══════════════════════════════
+# KAFKA UI
+# ═══════════════════════════════
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: uconnect-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: uconnect
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+# ═══════════════════════════════
+# COLLECTORS
+# ═══════════════════════════════
+  collector-hackernews:
+    build: ./collectors/hackernews
+    container_name: uconnect-collector-hackernews
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      POLL_INTERVAL: "60"
+      BATCH_SIZE: "50"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-rss:
+    build: ./collectors/rss
+    container_name: uconnect-collector-rss
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      POLL_INTERVAL: "300"
+      RSS_FEEDS: "https://hnrss.org/newest,https://www.reddit.com/r/programming/.rss"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-stackoverflow:
+    build: ./collectors/stackoverflow
+    container_name: uconnect-collector-stackoverflow
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      POLL_INTERVAL: "120"
+      SO_API_KEY: ${SO_API_KEY:-}
+      SO_SITE: "stackoverflow"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-bluesky:
+    build: ./collectors/bluesky
+    container_name: uconnect-collector-bluesky
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      JETSTREAM_URL: "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post"
+      RECONNECT_DELAY: "5"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-nostr:
+    build: ./collectors/nostr
+    container_name: uconnect-collector-nostr
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      NOSTR_RELAYS: "wss://relay.damus.io,wss://nos.lol"
+      RECONNECT_DELAY: "10"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+# ═══════════════════════════════
+# RÉSEAU
+# ═══════════════════════════════
+networks:
+  uconnect-net:
+    driver: bridge
+
+# ═══════════════════════════════
+# VOLUMES
+# ═══════════════════════════════
+volumes:
+  kafka-data:
+  redis-data:
+  minio-data:
+  postgres-data:
+  airflow-logs:
+  superset-data:

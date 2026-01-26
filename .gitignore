@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+docs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+infra/
+
+# Docker
+*.log
+docker-compose.override.yml
+docker-compose.prod.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
