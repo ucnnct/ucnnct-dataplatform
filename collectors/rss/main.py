@@ -119,5 +119,5 @@ def collect():
 
 
 if __name__ == "__main__":
-    logger.info("Démarrage du collecteur | source=rss topic=%s feeds=%d", TOPIC, len(RSS_FEEDS))
+    logger.info("Démarrage du collecteur | source=rss topic=%s feeds=%d version=1.1.0", TOPIC, len(RSS_FEEDS))
     collect()

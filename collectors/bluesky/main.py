@@ -102,5 +102,5 @@ async def collect():
 
 
 if __name__ == "__main__":
-    logger.info("Démarrage du collecteur | source=bluesky topic=%s", TOPIC)
+    logger.info("Démarrage du collecteur | source=bluesky topic=%s version=1.1.0", TOPIC)
     asyncio.run(collect())

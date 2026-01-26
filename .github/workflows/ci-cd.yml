@@ -75,6 +75,7 @@ jobs:
             loki:
               - 'collectors/**'
               - 'consumers/**'
+              - 'infra/redis/**'
               - 'docker-compose.vm1-loki.yml'
             brogy:
               - 'spark/**'
@@ -83,6 +84,7 @@ jobs:
             saul:
               - 'infra/postgres/**'
               - 'infra/superset/**'
+              - 'infra/minio/**'
               - 'docker-compose.vm3-saul.yml'
 
       - id: set-matrix
