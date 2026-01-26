@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Rebuild tous les collectors et consumers'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 env:
   REGISTRY: ghcr.io
@@ -37,7 +45,7 @@ jobs:
   detect-changes:
     name: Détection des changements
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     outputs:
       collectors: ${{ steps.set-matrix.outputs.collectors }}
       consumers: ${{ steps.set-matrix.outputs.consumers }}
@@ -89,22 +97,29 @@ jobs:
 
       - id: set-matrix
         run: |
-          collectors=()
-          [[ "${{ steps.filter.outputs.col_bluesky }}"      == "true" ]] && collectors+=("bluesky")
-          [[ "${{ steps.filter.outputs.col_nostr }}"        == "true" ]] && collectors+=("nostr")
-          [[ "${{ steps.filter.outputs.col_hackernews }}"   == "true" ]] && collectors+=("hackernews")
-          [[ "${{ steps.filter.outputs.col_rss }}"          == "true" ]] && collectors+=("rss")
-          [[ "${{ steps.filter.outputs.col_stackoverflow }}" == "true" ]] && collectors+=("stackoverflow")
+          force="${{ github.event.inputs.force_rebuild }}"
 
-          consumers=()
-          [[ "${{ steps.filter.outputs.con_bluesky }}"      == "true" ]] && consumers+=("bluesky")
-          [[ "${{ steps.filter.outputs.con_nostr }}"        == "true" ]] && consumers+=("nostr")
-          [[ "${{ steps.filter.outputs.con_hackernews }}"   == "true" ]] && consumers+=("hackernews")
-          [[ "${{ steps.filter.outputs.con_rss }}"          == "true" ]] && consumers+=("rss")
-          [[ "${{ steps.filter.outputs.con_stackoverflow }}" == "true" ]] && consumers+=("stackoverflow")
+          if [[ "$force" == "true" ]]; then
+            echo "collectors=$(jq -cn '$ARGS.positional' --args bluesky nostr hackernews rss stackoverflow)" >> $GITHUB_OUTPUT
+            echo "consumers=$(jq -cn '$ARGS.positional' --args)" >> $GITHUB_OUTPUT
+          else
+            collectors=()
+            [[ "${{ steps.filter.outputs.col_bluesky }}"      == "true" ]] && collectors+=("bluesky")
+            [[ "${{ steps.filter.outputs.col_nostr }}"        == "true" ]] && collectors+=("nostr")
+            [[ "${{ steps.filter.outputs.col_hackernews }}"   == "true" ]] && collectors+=("hackernews")
+            [[ "${{ steps.filter.outputs.col_rss }}"          == "true" ]] && collectors+=("rss")
+            [[ "${{ steps.filter.outputs.col_stackoverflow }}" == "true" ]] && collectors+=("stackoverflow")
 
-          echo "collectors=$(jq -cn '$ARGS.positional' --args "${collectors[@]}")" >> $GITHUB_OUTPUT
-          echo "consumers=$(jq -cn '$ARGS.positional' --args "${consumers[@]}")" >> $GITHUB_OUTPUT
+            consumers=()
+            [[ "${{ steps.filter.outputs.con_bluesky }}"      == "true" ]] && consumers+=("bluesky")
+            [[ "${{ steps.filter.outputs.con_nostr }}"        == "true" ]] && consumers+=("nostr")
+            [[ "${{ steps.filter.outputs.con_hackernews }}"   == "true" ]] && consumers+=("hackernews")
+            [[ "${{ steps.filter.outputs.con_rss }}"          == "true" ]] && consumers+=("rss")
+            [[ "${{ steps.filter.outputs.con_stackoverflow }}" == "true" ]] && consumers+=("stackoverflow")
+
+            echo "collectors=$(jq -cn '$ARGS.positional' --args "${collectors[@]}")" >> $GITHUB_OUTPUT
+            echo "consumers=$(jq -cn '$ARGS.positional' --args "${consumers[@]}")" >> $GITHUB_OUTPUT
+          fi
 
   build-collectors:
     name: Build & Push collector — ${{ matrix.collector }}
