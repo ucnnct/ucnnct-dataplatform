@@ -63,7 +63,6 @@ def build_payload(data):
 
 async def collect():
     token = authenticate()
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     while True:
         try:
