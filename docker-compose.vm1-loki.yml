@@ -89,7 +89,7 @@ services:
 
   collector-bluesky:
     build: ./collectors/bluesky
-    image: ghcr.io/ucnnct/uconnect-collector-bluesky:${IMAGE_TAG:-latest}
+    image: ghcr.io/ucnnct/uconnect-collector-bluesky:latest
     container_name: uconnect-collector-bluesky
     depends_on:
       kafka:
@@ -106,7 +106,7 @@ services:
 
   collector-nostr:
     build: ./collectors/nostr
-    image: ghcr.io/ucnnct/uconnect-collector-nostr:${IMAGE_TAG:-latest}
+    image: ghcr.io/ucnnct/uconnect-collector-nostr:latest
     container_name: uconnect-collector-nostr
     depends_on:
       kafka:
@@ -121,7 +121,7 @@ services:
 
   collector-hackernews:
     build: ./collectors/hackernews
-    image: ghcr.io/ucnnct/uconnect-collector-hackernews:${IMAGE_TAG:-latest}
+    image: ghcr.io/ucnnct/uconnect-collector-hackernews:latest
     container_name: uconnect-collector-hackernews
     depends_on:
       kafka:
@@ -136,7 +136,7 @@ services:
 
   collector-rss:
     build: ./collectors/rss
-    image: ghcr.io/ucnnct/uconnect-collector-rss:${IMAGE_TAG:-latest}
+    image: ghcr.io/ucnnct/uconnect-collector-rss:latest
     container_name: uconnect-collector-rss
     depends_on:
       kafka:
@@ -151,7 +151,7 @@ services:
 
   collector-stackoverflow:
     build: ./collectors/stackoverflow
-    image: ghcr.io/ucnnct/uconnect-collector-stackoverflow:${IMAGE_TAG:-latest}
+    image: ghcr.io/ucnnct/uconnect-collector-stackoverflow:latest
     container_name: uconnect-collector-stackoverflow
     depends_on:
       kafka:

@@ -134,7 +134,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.ORG }}/uconnect-collector-${{ matrix.collector }}
-          tags: type=sha,prefix=sha-,format=short
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
 
       - uses: docker/build-push-action@v5
         with:
@@ -173,7 +175,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.ORG }}/uconnect-consumer-${{ matrix.consumer }}
-          tags: type=sha,prefix=sha-,format=short
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
 
       - uses: docker/build-push-action@v5
         with:
@@ -216,9 +220,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Calcul du tag SHA court
-        run: echo "IMAGE_TAG=sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_ENV
-
       - name: Pull et redémarrage
         run: |
           docker compose -f docker-compose.vm1-loki.yml pull
@@ -231,7 +232,7 @@ jobs:
             status=$(docker inspect --format='{{.State.Status}}' "uconnect-${service}" 2>/dev/null || echo "absent")
             [ "$status" = "running" ] && echo "OK uconnect-${service}" || { echo "ERREUR uconnect-${service} — $status"; exit 1; }
           done
-          echo "VM1 loki — deploiement valide — tag: $IMAGE_TAG"
+          echo "VM1 loki — deploiement valide"
 
   deploy-vm2-brogy:
     name: Deploy — brogy
