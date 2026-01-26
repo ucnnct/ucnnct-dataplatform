@@ -2,9 +2,6 @@ version: '3.8'
 
 services:
 
-  # ═══════════════════════════════
-  # KAFKA KRaft 
-  # ═══════════════════════════════
   kafka:
     image: apache/kafka:latest
     container_name: uconnect-kafka
@@ -57,9 +54,6 @@ services:
         echo "Topics Kafka crees (retention 2 jours)."
     restart: on-failure
 
-  # ═══════════════════════════════
-  # REDIS (déduplication)
-  # ═══════════════════════════════
   redis:
     image: redis:7-alpine
     container_name: uconnect-redis
@@ -77,15 +71,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # ═══════════════════════════════
-  # MINIO (Object Store)
-  # ═══════════════════════════════
   minio:
     image: minio/minio:latest
     container_name: uconnect-minio
     ports:
       - "9000:9000"
-      - "9001:9001"      # Console UI
+      - "9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -120,9 +111,6 @@ services:
         echo "Buckets MinIO crees."
     restart: on-failure
 
-  # ═══════════════════════════════
-  # POSTGRESQL (staging + datamart)
-  # ═══════════════════════════════
   postgres:
     image: postgres:15
     container_name: uconnect-postgres
@@ -143,16 +131,13 @@ services:
       timeout: 5s
       retries: 5
 
-  # ═══════════════════════════════
-  # SPARK (Master + 2 Workers)
-  # ═══════════════════════════════
   spark-master:
     image: apache/spark:latest
     container_name: uconnect-spark-master
     hostname: spark-master
     ports:
-      - "8080:8080"   # Spark UI
-      - "7077:7077"   # Spark Master port
+      - "8080:8080"
+      - "7077:7077"
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     volumes:
       - ./spark/jobs:/opt/spark/jobs
@@ -187,9 +172,6 @@ services:
     networks:
       - uconnect-net
 
-  # ═══════════════════════════════
-  # AIRFLOW (orchestration)
-  # ═══════════════════════════════
   airflow:
     image: apache/airflow:2.9.0
     container_name: uconnect-airflow
@@ -197,7 +179,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8081:8080"   # Airflow UI
+      - "8081:8080"
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -211,9 +193,6 @@ services:
     networks:
       - uconnect-net
 
-  # ═══════════════════════════════
-  # SUPERSET (visualisation)
-  # ═══════════════════════════════
   superset:
     image: apache/superset:latest
     container_name: uconnect-superset
@@ -221,7 +200,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8088:8088"   # Superset UI
+      - "8088:8088"
     environment:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -231,9 +210,6 @@ services:
     networks:
       - uconnect-net
 
-# ═══════════════════════════════
-# KAFKA UI
-# ═══════════════════════════════
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: uconnect-kafka-ui
@@ -249,11 +225,9 @@ services:
       - uconnect-net
     restart: unless-stopped
 
-# ═══════════════════════════════
-# COLLECTORS
-# ═══════════════════════════════
   collector-hackernews:
     build: ./collectors/hackernews
+    image: ghcr.io/ucnnct/uconnect-collector-hackernews:${IMAGE_TAG:-latest}
     container_name: uconnect-collector-hackernews
     depends_on:
       kafka:
@@ -268,6 +242,7 @@ services:
 
   collector-rss:
     build: ./collectors/rss
+    image: ghcr.io/ucnnct/uconnect-collector-rss:${IMAGE_TAG:-latest}
     container_name: uconnect-collector-rss
     depends_on:
       kafka:
@@ -282,6 +257,7 @@ services:
 
   collector-stackoverflow:
     build: ./collectors/stackoverflow
+    image: ghcr.io/ucnnct/uconnect-collector-stackoverflow:${IMAGE_TAG:-latest}
     container_name: uconnect-collector-stackoverflow
     depends_on:
       kafka:
@@ -297,6 +273,7 @@ services:
 
   collector-bluesky:
     build: ./collectors/bluesky
+    image: ghcr.io/ucnnct/uconnect-collector-bluesky:${IMAGE_TAG:-latest}
     container_name: uconnect-collector-bluesky
     depends_on:
       kafka:
@@ -305,12 +282,15 @@ services:
       KAFKA_BOOTSTRAP: kafka:9092
       JETSTREAM_URL: "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post"
       RECONNECT_DELAY: "5"
+      BLUESKY_HANDLE: ${BLUESKY_HANDLE:-}
+      BLUESKY_PASSWORD: ${BLUESKY_PASSWORD:-}
     networks:
       - uconnect-net
     restart: unless-stopped
 
   collector-nostr:
     build: ./collectors/nostr
+    image: ghcr.io/ucnnct/uconnect-collector-nostr:${IMAGE_TAG:-latest}
     container_name: uconnect-collector-nostr
     depends_on:
       kafka:
@@ -323,16 +303,10 @@ services:
       - uconnect-net
     restart: unless-stopped
 
-# ═══════════════════════════════
-# RÉSEAU
-# ═══════════════════════════════
 networks:
   uconnect-net:
     driver: bridge
 
-# ═══════════════════════════════
-# VOLUMES
-# ═══════════════════════════════
 volumes:
   kafka-data:
   redis-data:

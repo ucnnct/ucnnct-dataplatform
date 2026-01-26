@@ -1,0 +1,71 @@
+# VM2 — brogy — 172.31.253.72 — Processing
+version: '3.8'
+
+services:
+
+  spark-master:
+    image: apache/spark:latest
+    container_name: uconnect-spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    networks:
+      - uconnect-net
+
+  spark-worker-1:
+    image: apache/spark:latest
+    container_name: uconnect-spark-worker-1
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_WORKER_MEMORY: 3G
+      SPARK_WORKER_CORES: 4
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    networks:
+      - uconnect-net
+
+  spark-worker-2:
+    image: apache/spark:latest
+    container_name: uconnect-spark-worker-2
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_WORKER_MEMORY: 3G
+      SPARK_WORKER_CORES: 4
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    networks:
+      - uconnect-net
+
+  airflow:
+    image: apache/airflow:2.9.0
+    container_name: uconnect-airflow
+    ports:
+      - "8081:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@172.31.253.25:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    volumes:
+      - ./infra/airflow/dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+    command: standalone
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+networks:
+  uconnect-net:
+    driver: bridge
+
+volumes:
+  airflow-logs:

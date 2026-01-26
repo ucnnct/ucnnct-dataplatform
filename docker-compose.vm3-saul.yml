@@ -1,0 +1,92 @@
+# VM3 — saul — 172.31.253.25 — Storage & Viz
+# MinIO : zunesha — 172.31.250.57 — 175GB
+version: '3.8'
+
+services:
+
+  minio:
+    image: minio/minio:latest
+    container_name: uconnect-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: uconnect-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - uconnect-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+        mc mb --ignore-existing local/raw
+        mc mb --ignore-existing local/curated
+        echo "Buckets MinIO crees."
+    restart: on-failure
+
+  postgres:
+    image: postgres:15
+    container_name: uconnect-postgres
+    ports:
+      - "0.0.0.0:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  superset:
+    image: apache/superset:latest
+    container_name: uconnect-superset
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - superset-data:/app/superset_home
+      - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+networks:
+  uconnect-net:
+    driver: bridge
+
+volumes:
+  minio-data:
+  postgres-data:
+  superset-data:

@@ -1,0 +1,172 @@
+# VM1 — loki — 172.31.249.96 — Ingestion
+version: '3.8'
+
+services:
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: uconnect-kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://172.31.249.96:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  kafka-init:
+    image: apache/kafka:latest
+    container_name: uconnect-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - uconnect-net
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        for topic in uconnect.datalake.raw.bluesky uconnect.datalake.raw.nostr uconnect.datalake.raw.hackernews uconnect.datalake.raw.stackoverflow uconnect.datalake.raw.rss; do
+          /opt/kafka/bin/kafka-topics.sh \
+            --create --if-not-exists \
+            --bootstrap-server kafka:9092 \
+            --topic $$topic \
+            --partitions 3 \
+            --replication-factor 1 \
+            --config retention.ms=172800000
+        done
+        echo "Topics Kafka crees (retention 2 jours)."
+    restart: on-failure
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: uconnect-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: uconnect
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: uconnect-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - uconnect-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  collector-bluesky:
+    build: ./collectors/bluesky
+    image: ghcr.io/ucnnct/uconnect-collector-bluesky:${IMAGE_TAG:-latest}
+    container_name: uconnect-collector-bluesky
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      JETSTREAM_URL: "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post,app.bsky.feed.like,app.bsky.graph.follow"
+      RECONNECT_DELAY: "5"
+      BLUESKY_HANDLE: ${BLUESKY_HANDLE:-}
+      BLUESKY_PASSWORD: ${BLUESKY_PASSWORD:-}
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-nostr:
+    build: ./collectors/nostr
+    image: ghcr.io/ucnnct/uconnect-collector-nostr:${IMAGE_TAG:-latest}
+    container_name: uconnect-collector-nostr
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      NOSTR_RELAYS: "wss://relay.damus.io,wss://nos.lol,wss://relay.snort.social,wss://nostr.wine,wss://relay.nostr.bg,wss://nostr.bitcoiner.social,wss://offchain.pub,wss://nostr.mom,wss://relay.current.fyi"
+      RECONNECT_DELAY: "10"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-hackernews:
+    build: ./collectors/hackernews
+    image: ghcr.io/ucnnct/uconnect-collector-hackernews:${IMAGE_TAG:-latest}
+    container_name: uconnect-collector-hackernews
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      POLL_INTERVAL: "60"
+      BATCH_SIZE: "50"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-rss:
+    build: ./collectors/rss
+    image: ghcr.io/ucnnct/uconnect-collector-rss:${IMAGE_TAG:-latest}
+    container_name: uconnect-collector-rss
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      POLL_INTERVAL: "300"
+      RSS_FEEDS: "https://dev.to/feed,https://hnrss.org/frontpage,https://lobste.rs/rss,https://www.reddit.com/r/machinelearning/.rss,https://www.reddit.com/r/datascience/.rss,https://aws.amazon.com/blogs/aws/feed/,https://github.blog/feed/,https://techcrunch.com/feed/,https://stackoverflow.blog/feed/,https://www.theverge.com/rss/index.xml,https://www.wired.com/feed/rss,https://feeds.bbci.co.uk/news/world/rss.xml,http://feeds.reuters.com/reuters/topNews"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  collector-stackoverflow:
+    build: ./collectors/stackoverflow
+    image: ghcr.io/ucnnct/uconnect-collector-stackoverflow:${IMAGE_TAG:-latest}
+    container_name: uconnect-collector-stackoverflow
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      SO_API_KEY: ${SO_API_KEY:-}
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+networks:
+  uconnect-net:
+    driver: bridge
+
+volumes:
+  kafka-data:
+  redis-data:

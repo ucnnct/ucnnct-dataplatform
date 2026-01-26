@@ -1,0 +1,308 @@
+name: CI/CD — uconnect-data-platform
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  ORG: ucnnct
+
+jobs:
+
+  lint:
+    name: Lint Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install flake8
+
+      - run: |
+          flake8 collectors/ consumers/ \
+            --max-line-length=120 \
+            --exclude=__pycache__ \
+            --statistics
+
+  detect-changes:
+    name: Détection des changements
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      collectors: ${{ steps.set-matrix.outputs.collectors }}
+      consumers: ${{ steps.set-matrix.outputs.consumers }}
+      loki: ${{ steps.filter.outputs.loki }}
+      brogy: ${{ steps.filter.outputs.brogy }}
+      saul: ${{ steps.filter.outputs.saul }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            col_bluesky:
+              - 'collectors/bluesky/**'
+            col_nostr:
+              - 'collectors/nostr/**'
+            col_hackernews:
+              - 'collectors/hackernews/**'
+            col_rss:
+              - 'collectors/rss/**'
+            col_stackoverflow:
+              - 'collectors/stackoverflow/**'
+            con_bluesky:
+              - 'consumers/bluesky/**'
+            con_nostr:
+              - 'consumers/nostr/**'
+            con_hackernews:
+              - 'consumers/hackernews/**'
+            con_rss:
+              - 'consumers/rss/**'
+            con_stackoverflow:
+              - 'consumers/stackoverflow/**'
+            loki:
+              - 'collectors/**'
+              - 'consumers/**'
+              - 'docker-compose.vm1-loki.yml'
+            brogy:
+              - 'spark/**'
+              - 'infra/airflow/**'
+              - 'docker-compose.vm2-brogy.yml'
+            saul:
+              - 'infra/postgres/**'
+              - 'infra/superset/**'
+              - 'docker-compose.vm3-saul.yml'
+
+      - id: set-matrix
+        run: |
+          collectors=()
+          [[ "${{ steps.filter.outputs.col_bluesky }}"      == "true" ]] && collectors+=("bluesky")
+          [[ "${{ steps.filter.outputs.col_nostr }}"        == "true" ]] && collectors+=("nostr")
+          [[ "${{ steps.filter.outputs.col_hackernews }}"   == "true" ]] && collectors+=("hackernews")
+          [[ "${{ steps.filter.outputs.col_rss }}"          == "true" ]] && collectors+=("rss")
+          [[ "${{ steps.filter.outputs.col_stackoverflow }}" == "true" ]] && collectors+=("stackoverflow")
+
+          consumers=()
+          [[ "${{ steps.filter.outputs.con_bluesky }}"      == "true" ]] && consumers+=("bluesky")
+          [[ "${{ steps.filter.outputs.con_nostr }}"        == "true" ]] && consumers+=("nostr")
+          [[ "${{ steps.filter.outputs.con_hackernews }}"   == "true" ]] && consumers+=("hackernews")
+          [[ "${{ steps.filter.outputs.con_rss }}"          == "true" ]] && consumers+=("rss")
+          [[ "${{ steps.filter.outputs.con_stackoverflow }}" == "true" ]] && consumers+=("stackoverflow")
+
+          echo "collectors=$(jq -cn '$ARGS.positional' --args "${collectors[@]}")" >> $GITHUB_OUTPUT
+          echo "consumers=$(jq -cn '$ARGS.positional' --args "${consumers[@]}")" >> $GITHUB_OUTPUT
+
+  build-collectors:
+    name: Build & Push collector — ${{ matrix.collector }}
+    runs-on: ubuntu-latest
+    needs: [lint, detect-changes]
+    if: needs.detect-changes.outputs.collectors != '[]'
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        collector: ${{ fromJson(needs.detect-changes.outputs.collectors) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.ORG }}/uconnect-collector-${{ matrix.collector }}
+          tags: type=sha,prefix=sha-,format=short
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./collectors/${{ matrix.collector }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-consumers:
+    name: Build & Push consumer — ${{ matrix.consumer }}
+    runs-on: ubuntu-latest
+    needs: [lint, detect-changes]
+    if: needs.detect-changes.outputs.consumers != '[]'
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        consumer: ${{ fromJson(needs.detect-changes.outputs.consumers) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.ORG }}/uconnect-consumer-${{ matrix.consumer }}
+          tags: type=sha,prefix=sha-,format=short
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./consumers/${{ matrix.consumer }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-vm1-loki:
+    name: Deploy — loki
+    runs-on: [self-hosted, linux, uconnect-loki]
+    needs: [build-collectors, build-consumers, detect-changes]
+    if: always() && needs.detect-changes.outputs.loki == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Générer le .env
+        run: |
+          cat > .env << EOF
+          KAFKA_CLUSTER_ID=${{ secrets.KAFKA_CLUSTER_ID }}
+          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          AIRFLOW_FERNET_KEY=${{ secrets.AIRFLOW_FERNET_KEY }}
+          AIRFLOW_SECRET_KEY=${{ secrets.AIRFLOW_SECRET_KEY }}
+          SUPERSET_SECRET_KEY=${{ secrets.SUPERSET_SECRET_KEY }}
+          SO_API_KEY=${{ secrets.SO_API_KEY }}
+          BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
+          EOF
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calcul du tag SHA court
+        run: echo "IMAGE_TAG=sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_ENV
+
+      - name: Pull et redémarrage
+        run: |
+          docker compose -f docker-compose.vm1-loki.yml pull
+          docker compose -f docker-compose.vm1-loki.yml up -d
+
+      - name: Vérification de santé
+        run: |
+          sleep 10
+          for service in collector-bluesky collector-nostr collector-hackernews collector-rss collector-stackoverflow; do
+            status=$(docker inspect --format='{{.State.Status}}' "uconnect-${service}" 2>/dev/null || echo "absent")
+            [ "$status" = "running" ] && echo "OK uconnect-${service}" || { echo "ERREUR uconnect-${service} — $status"; exit 1; }
+          done
+          echo "VM1 loki — deploiement valide — tag: $IMAGE_TAG"
+
+  deploy-vm2-brogy:
+    name: Deploy — brogy
+    runs-on: [self-hosted, linux, uconnect-brogy]
+    needs: [build-collectors, build-consumers, detect-changes]
+    if: always() && needs.detect-changes.outputs.brogy == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Générer le .env
+        run: |
+          cat > .env << EOF
+          KAFKA_CLUSTER_ID=${{ secrets.KAFKA_CLUSTER_ID }}
+          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          AIRFLOW_FERNET_KEY=${{ secrets.AIRFLOW_FERNET_KEY }}
+          AIRFLOW_SECRET_KEY=${{ secrets.AIRFLOW_SECRET_KEY }}
+          SUPERSET_SECRET_KEY=${{ secrets.SUPERSET_SECRET_KEY }}
+          SO_API_KEY=${{ secrets.SO_API_KEY }}
+          BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
+          EOF
+
+      - name: Pull et redémarrage
+        run: |
+          docker compose -f docker-compose.vm2-brogy.yml pull
+          docker compose -f docker-compose.vm2-brogy.yml up -d
+
+      - name: Vérification de santé
+        run: |
+          sleep 15
+          for container in uconnect-spark-master uconnect-spark-worker-1 uconnect-spark-worker-2 uconnect-airflow; do
+            status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null || echo "absent")
+            [ "$status" = "running" ] && echo "OK $container" || { echo "ERREUR $container — $status"; exit 1; }
+          done
+          echo "VM2 brogy — deploiement valide."
+
+  deploy-vm3-saul:
+    name: Deploy — saul
+    runs-on: [self-hosted, linux, uconnect-saul]
+    needs: [build-collectors, build-consumers, detect-changes]
+    if: always() && needs.detect-changes.outputs.saul == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Générer le .env
+        run: |
+          cat > .env << EOF
+          KAFKA_CLUSTER_ID=${{ secrets.KAFKA_CLUSTER_ID }}
+          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          AIRFLOW_FERNET_KEY=${{ secrets.AIRFLOW_FERNET_KEY }}
+          AIRFLOW_SECRET_KEY=${{ secrets.AIRFLOW_SECRET_KEY }}
+          SUPERSET_SECRET_KEY=${{ secrets.SUPERSET_SECRET_KEY }}
+          SO_API_KEY=${{ secrets.SO_API_KEY }}
+          BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
+          EOF
+
+      - name: Pull et redémarrage
+        run: |
+          docker compose -f docker-compose.vm3-saul.yml pull
+          docker compose -f docker-compose.vm3-saul.yml up -d
+
+      - name: Vérification de santé
+        run: |
+          sleep 15
+          for container in uconnect-postgres uconnect-superset; do
+            status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null || echo "absent")
+            [ "$status" = "running" ] && echo "OK $container" || { echo "ERREUR $container — $status"; exit 1; }
+          done
+          echo "VM3 saul — deploiement valide."
