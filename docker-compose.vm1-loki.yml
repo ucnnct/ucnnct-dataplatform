@@ -95,16 +95,14 @@ services:
       - uconnect-net
     restart: unless-stopped
 
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: uconnect-redis-commander
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: uconnect-redisinsight
     depends_on:
       redis:
         condition: service_healthy
     ports:
-      - "8081:8081"
-    environment:
-      REDIS_HOSTS: "local:redis:6379"
+      - "5540:5540"
     networks:
       - uconnect-net
     restart: unless-stopped
