@@ -233,6 +233,7 @@ jobs:
           SO_API_KEY=${{ secrets.SO_API_KEY }}
           BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
+          CLOUDFLARE_TUNNEL_TOKEN=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
           EOF
 
       - uses: docker/login-action@v3

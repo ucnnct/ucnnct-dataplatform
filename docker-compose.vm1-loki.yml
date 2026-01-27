@@ -87,6 +87,28 @@ services:
       timeout: 5s
       retries: 5
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: uconnect-cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: uconnect-redis-commander
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: "local:redis:6379"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
   collector-bluesky:
     build: ./collectors/bluesky
     image: ghcr.io/ucnnct/uconnect-collector-bluesky:latest
@@ -159,6 +181,111 @@ services:
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
       SO_API_KEY: ${SO_API_KEY:-}
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  consumer-bluesky:
+    build: ./consumers/bluesky
+    image: ghcr.io/ucnnct/uconnect-consumer-bluesky:latest
+    container_name: uconnect-consumer-bluesky
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: "172.31.250.57:9000"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      BATCH_SIZE: "200000"
+      FLUSH_INTERVAL: "1200"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  consumer-nostr:
+    build: ./consumers/nostr
+    image: ghcr.io/ucnnct/uconnect-consumer-nostr:latest
+    container_name: uconnect-consumer-nostr
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: "172.31.250.57:9000"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      BATCH_SIZE: "55000"
+      FLUSH_INTERVAL: "3600"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  consumer-hackernews:
+    build: ./consumers/hackernews
+    image: ghcr.io/ucnnct/uconnect-consumer-hackernews:latest
+    container_name: uconnect-consumer-hackernews
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: "172.31.250.57:9000"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      BATCH_SIZE: "5000"
+      FLUSH_INTERVAL: "3600"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  consumer-rss:
+    build: ./consumers/rss
+    image: ghcr.io/ucnnct/uconnect-consumer-rss:latest
+    container_name: uconnect-consumer-rss
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: "172.31.250.57:9000"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      BATCH_SIZE: "5000"
+      FLUSH_INTERVAL: "3600"
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
+  consumer-stackoverflow:
+    build: ./consumers/stackoverflow
+    image: ghcr.io/ucnnct/uconnect-consumer-stackoverflow:latest
+    container_name: uconnect-consumer-stackoverflow
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: "172.31.250.57:9000"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      BATCH_SIZE: "5000"
+      FLUSH_INTERVAL: "3600"
     networks:
       - uconnect-net
     restart: unless-stopped
