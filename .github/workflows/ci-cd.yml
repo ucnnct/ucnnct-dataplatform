@@ -34,8 +34,9 @@ jobs:
 
       - run: |
           dirs=""
-          [ -d "collectors/" ] && dirs="$dirs collectors/"
-          [ -d "consumers/" ] && dirs="$dirs consumers/"
+          [ -d "collectors/" ]  && dirs="$dirs collectors/"
+          [ -d "consumers/" ]   && dirs="$dirs consumers/"
+          [ -d "spark/jobs/" ]  && dirs="$dirs spark/jobs/"
           flake8 $dirs \
             --max-line-length=120 \
             --extend-ignore=E221 \
@@ -101,9 +102,9 @@ jobs:
 
           if [[ "$force" == "true" ]]; then
             echo "collectors=$(jq -cn '$ARGS.positional' --args bluesky nostr hackernews rss stackoverflow)" >> $GITHUB_OUTPUT
-            echo "consumers=$(jq -cn '$ARGS.positional' --args)" >> $GITHUB_OUTPUT
-            echo "loki=true"  >> $GITHUB_OUTPUT
-            echo "brogy=false" >> $GITHUB_OUTPUT
+            echo "consumers=$(jq -cn '$ARGS.positional' --args bluesky nostr hackernews rss stackoverflow)" >> $GITHUB_OUTPUT
+            echo "loki=true"   >> $GITHUB_OUTPUT
+            echo "brogy=true"  >> $GITHUB_OUTPUT
             echo "saul=false"  >> $GITHUB_OUTPUT
           else
             collectors=()
@@ -281,6 +282,16 @@ jobs:
           BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
           EOF
+
+      - name: Téléchargement JARs S3A
+        run: |
+          mkdir -p spark/jars
+          [ -f spark/jars/hadoop-aws-3.3.4.jar ] || \
+            curl -fsSL "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar" \
+              -o spark/jars/hadoop-aws-3.3.4.jar
+          [ -f spark/jars/aws-java-sdk-bundle-1.12.367.jar ] || \
+            curl -fsSL "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar" \
+              -o spark/jars/aws-java-sdk-bundle-1.12.367.jar
 
       - name: Pull et redémarrage
         run: |
