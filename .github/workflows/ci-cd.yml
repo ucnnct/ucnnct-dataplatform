@@ -264,6 +264,9 @@ jobs:
     if: always() && needs.detect-changes.outputs.brogy == 'true'
 
     steps:
+      - name: Nettoyer workspace (droits root Docker)
+        run: sudo rm -rf ${{ github.workspace }} && mkdir -p ${{ github.workspace }}
+
       - uses: actions/checkout@v4
 
       - name: Générer le .env
