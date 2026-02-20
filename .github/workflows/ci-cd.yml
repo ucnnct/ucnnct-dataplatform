@@ -365,6 +365,7 @@ jobs:
 
       - name: Pull et redémarrage
         run: |
+          docker compose -f docker-compose.vm3-saul.yml down --remove-orphans 2>/dev/null || true
           docker compose -f docker-compose.vm3-saul.yml pull
           docker compose -f docker-compose.vm3-saul.yml up -d
 
