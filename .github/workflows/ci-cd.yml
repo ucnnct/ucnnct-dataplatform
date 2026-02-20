@@ -346,25 +346,18 @@ jobs:
       - name: Générer le .env
         run: |
           cat > .env << EOF
-          KAFKA_CLUSTER_ID=${{ secrets.KAFKA_CLUSTER_ID }}
-          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
-          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          AIRFLOW_FERNET_KEY=${{ secrets.AIRFLOW_FERNET_KEY }}
-          AIRFLOW_SECRET_KEY=${{ secrets.AIRFLOW_SECRET_KEY }}
           SUPERSET_SECRET_KEY=${{ secrets.SUPERSET_SECRET_KEY }}
-          SO_API_KEY=${{ secrets.SO_API_KEY }}
-          BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
-          BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
           EOF
 
       - name: Pré-créer répertoires volumes
-        run: mkdir -p infra/postgres/init infra/superset infra/minio
+        run: mkdir -p infra/postgres/init infra/superset
 
       - name: Pull et redémarrage
         run: |
+          docker ps -aq --filter publish=5432 | xargs -r docker rm -f 2>/dev/null || true
           docker compose -f docker-compose.vm3-saul.yml down --remove-orphans 2>/dev/null || true
           docker compose -f docker-compose.vm3-saul.yml pull
           docker compose -f docker-compose.vm3-saul.yml up -d

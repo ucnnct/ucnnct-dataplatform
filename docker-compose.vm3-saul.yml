@@ -1,48 +1,8 @@
 # VM3 — saul — 172.31.253.25 — Storage & Viz
-# MinIO : zunesha — 172.31.250.57 — 175GB
+# MinIO : zunesha — 172.31.250.57 — 175GB (externe, non géré ici)
 version: '3.8'
 
 services:
-
-  minio:
-    image: minio/minio:latest
-    container_name: uconnect-minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
-    networks:
-      - uconnect-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: uconnect-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    networks:
-      - uconnect-net
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
-        mc mb --ignore-existing local/raw
-        mc mb --ignore-existing local/curated
-        echo "Buckets MinIO crees."
-    restart: on-failure
 
   postgres:
     image: postgres:15
@@ -87,6 +47,5 @@ networks:
     driver: bridge
 
 volumes:
-  minio-data:
   postgres-data:
   superset-data:
