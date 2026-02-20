@@ -265,7 +265,14 @@ jobs:
 
     steps:
       - name: Nettoyer workspace (droits root Docker)
-        run: docker run --rm -v "${{ github.workspace }}:/ws" alpine rm -rf /ws/infra
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker run --rm --entrypoint sh \
+            -v "${{ github.workspace }}/infra:/infra" \
+            ghcr.io/${{ env.ORG }}/uconnect-collector-bluesky:latest \
+            -c "rm -rf /infra" 2>/dev/null || true
 
       - uses: actions/checkout@v4
 
@@ -300,6 +307,9 @@ jobs:
             curl -fsSL "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar" \
               -o spark/jars/postgresql-42.7.3.jar
 
+      - name: Pré-créer répertoires volumes
+        run: mkdir -p infra/airflow/dags spark/jobs spark/jars
+
       - name: Pull et redémarrage
         run: |
           docker compose -f docker-compose.vm2-brogy.yml pull
@@ -322,7 +332,14 @@ jobs:
 
     steps:
       - name: Nettoyer workspace (droits root Docker)
-        run: docker run --rm -v "${{ github.workspace }}:/ws" alpine rm -rf /ws/infra
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker run --rm --entrypoint sh \
+            -v "${{ github.workspace }}/infra:/infra" \
+            ghcr.io/${{ env.ORG }}/uconnect-collector-bluesky:latest \
+            -c "rm -rf /infra" 2>/dev/null || true
 
       - uses: actions/checkout@v4
 
@@ -342,6 +359,9 @@ jobs:
           BLUESKY_HANDLE=${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
           EOF
+
+      - name: Pré-créer répertoires volumes
+        run: mkdir -p infra/postgres/init infra/superset infra/minio
 
       - name: Pull et redémarrage
         run: |
