@@ -13,7 +13,7 @@ import sys
 from datetime import date
 from functools import reduce
 
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
 logging.basicConfig(
