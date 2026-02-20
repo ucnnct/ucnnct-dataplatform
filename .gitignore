@@ -10,8 +10,6 @@ __pycache__/
 .venv/
 venv/
 
-infra/
-
 # Docker
 *.log
 docker-compose.override.yml

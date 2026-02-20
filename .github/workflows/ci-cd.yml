@@ -270,6 +270,7 @@ jobs:
         run: |
           cat > .env << EOF
           KAFKA_CLUSTER_ID=${{ secrets.KAFKA_CLUSTER_ID }}
+          MINIO_ENDPOINT=${{ secrets.MINIO_ENDPOINT }}
           MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
           MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
@@ -283,7 +284,7 @@ jobs:
           BLUESKY_PASSWORD=${{ secrets.BLUESKY_PASSWORD }}
           EOF
 
-      - name: Téléchargement JARs S3A
+      - name: Téléchargement JARs S3A + JDBC
         run: |
           mkdir -p spark/jars
           [ -f spark/jars/hadoop-aws-3.3.4.jar ] || \
@@ -292,11 +293,14 @@ jobs:
           [ -f spark/jars/aws-java-sdk-bundle-1.12.367.jar ] || \
             curl -fsSL "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar" \
               -o spark/jars/aws-java-sdk-bundle-1.12.367.jar
+          [ -f spark/jars/postgresql-42.7.3.jar ] || \
+            curl -fsSL "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar" \
+              -o spark/jars/postgresql-42.7.3.jar
 
       - name: Pull et redémarrage
         run: |
           docker compose -f docker-compose.vm2-brogy.yml pull
-          docker compose -f docker-compose.vm2-brogy.yml up -d
+          PROJECT_ROOT=$(pwd) docker compose -f docker-compose.vm2-brogy.yml up -d
 
       - name: Vérification de santé
         run: |

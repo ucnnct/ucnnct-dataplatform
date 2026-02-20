@@ -15,6 +15,7 @@ services:
       - ./spark/jobs:/opt/spark/jobs
       - ./spark/jars/hadoop-aws-3.3.4.jar:/opt/spark/jars/hadoop-aws-3.3.4.jar
       - ./spark/jars/aws-java-sdk-bundle-1.12.367.jar:/opt/spark/jars/aws-java-sdk-bundle-1.12.367.jar
+      - ./spark/jars/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
     networks:
       - uconnect-net
 
@@ -31,6 +32,7 @@ services:
       - ./spark/jobs:/opt/spark/jobs
       - ./spark/jars/hadoop-aws-3.3.4.jar:/opt/spark/jars/hadoop-aws-3.3.4.jar
       - ./spark/jars/aws-java-sdk-bundle-1.12.367.jar:/opt/spark/jars/aws-java-sdk-bundle-1.12.367.jar
+      - ./spark/jars/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
     networks:
       - uconnect-net
 
@@ -47,12 +49,16 @@ services:
       - ./spark/jobs:/opt/spark/jobs
       - ./spark/jars/hadoop-aws-3.3.4.jar:/opt/spark/jars/hadoop-aws-3.3.4.jar
       - ./spark/jars/aws-java-sdk-bundle-1.12.367.jar:/opt/spark/jars/aws-java-sdk-bundle-1.12.367.jar
+      - ./spark/jars/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
     networks:
       - uconnect-net
 
   airflow:
-    image: apache/airflow:2.9.0
+    build:
+      context: infra/airflow
+      dockerfile: Dockerfile
     container_name: uconnect-airflow
+    user: "50000:0"
     ports:
       - "8081:8080"
     environment:
@@ -61,8 +67,20 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      AIRFLOW_CONN_SPARK_DEFAULT: "spark://spark-master:7077"
+      AIRFLOW_CONN_UCONNECT_POSTGRES: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@172.31.253.25:5432/${POSTGRES_DB}"
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      POSTGRES_HOST: 172.31.253.25
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./infra/airflow/dags:/opt/airflow/dags
+      - ./spark/jobs:/opt/spark/jobs
+      - ./spark/jars:/opt/spark/jars
       - airflow-logs:/opt/airflow/logs
     command: standalone
     networks:
