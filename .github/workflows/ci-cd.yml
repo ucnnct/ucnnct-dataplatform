@@ -270,9 +270,9 @@ jobs:
         run: |
           echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker run --rm --entrypoint sh \
-            -v "${{ github.workspace }}/infra:/infra" \
+            -v "${{ github.workspace }}:/ws" \
             ghcr.io/${{ env.ORG }}/uconnect-collector-bluesky:latest \
-            -c "rm -rf /infra" 2>/dev/null || true
+            -c "find /ws -mindepth 1 -maxdepth 1 | xargs rm -rf" 2>/dev/null || true
 
       - uses: actions/checkout@v4
 
@@ -337,9 +337,9 @@ jobs:
         run: |
           echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker run --rm --entrypoint sh \
-            -v "${{ github.workspace }}/infra:/infra" \
+            -v "${{ github.workspace }}:/ws" \
             ghcr.io/${{ env.ORG }}/uconnect-collector-bluesky:latest \
-            -c "rm -rf /infra" 2>/dev/null || true
+            -c "find /ws -mindepth 1 -maxdepth 1 | xargs rm -rf" 2>/dev/null || true
 
       - uses: actions/checkout@v4
 
