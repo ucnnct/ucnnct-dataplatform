@@ -46,6 +46,7 @@ def build_spark():
         .config("spark.hadoop.fs.s3a.path.style.access", "true")
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
+        .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
         .getOrCreate()
     )
 
@@ -80,8 +81,8 @@ def main():
 
     # Parsing RFC 2822 et ISO 8601 sans UDF (JVM natif)
     parse_date = F.coalesce(
-        F.to_timestamp(F.col("pubDate"), "EEE, dd MMM yyyy HH:mm:ss XX"),
-        F.to_timestamp(F.col("pubDate"), "EEE, d MMM yyyy HH:mm:ss XX"),
+        F.to_timestamp(F.col("pubDate"), "EEE, dd MMM yyyy HH:mm:ss Z"),
+        F.to_timestamp(F.col("pubDate"), "EEE, d MMM yyyy HH:mm:ss Z"),
         F.to_timestamp(F.col("pubDate"), "EEE, dd MMM yyyy HH:mm:ss z"),
         F.to_timestamp(F.col("pubDate"), "EEE, d MMM yyyy HH:mm:ss z"),
         F.to_timestamp(F.col("pubDate")),
