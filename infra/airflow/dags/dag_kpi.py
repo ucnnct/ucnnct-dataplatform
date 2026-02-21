@@ -48,7 +48,6 @@ with DAG(
         jars=JARS,
         verbose=True,
         env_vars={
-            "RUN_DATE": "{{ ds.replace('-', '/') }}",
             "MINIO_ENDPOINT": MINIO_ENDPOINT,
             "MINIO_ROOT_USER": MINIO_USER,
             "MINIO_ROOT_PASSWORD": MINIO_PASSWORD,

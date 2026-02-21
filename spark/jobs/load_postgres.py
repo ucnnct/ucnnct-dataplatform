@@ -1,16 +1,13 @@
 """
-P4 - Chargement curated -> staging.events PostgreSQL (premise)
+Chargement curated -> staging.events PostgreSQL (incrémental).
 
-Lit les Parquet curated (toutes sources) pour RUN_DATE et insere dans staging.events.
-tags array<string> -> TEXT comma-joined (JDBC ne supporte pas les tableaux PostgreSQL natifs).
-Idempotent : DELETE du jour avant INSERT.
-
-TODO : premise — a completer avec calcul des KPIs directement en SQL sur staging.events.
+Pour chaque source, lit le MAX(event_ts) dans staging.events (watermark),
+puis charge uniquement les événements plus récents depuis curated Parquet.
+Déduplication (source, event_id) avant écriture JDBC.
 """
 import logging
 import os
 import sys
-from datetime import date
 from functools import reduce
 
 from pyspark.sql import SparkSession
@@ -31,7 +28,6 @@ PG_PORT        = os.getenv("POSTGRES_PORT", "5432")
 PG_DB          = os.getenv("POSTGRES_DB", "uconnect")
 PG_USER        = os.getenv("POSTGRES_USER", "")
 PG_PASSWORD    = os.getenv("POSTGRES_PASSWORD", "")
-RUN_DATE       = os.getenv("RUN_DATE", date.today().strftime("%Y/%m/%d"))
 BUCKET         = "datalake"
 SOURCES        = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
 
@@ -49,36 +45,49 @@ def build_spark():
     )
 
 
+def get_watermark(spark, jdbc_url, props, source):
+    """Retourne le MAX(event_ts) pour une source, ou None si la table est vide."""
+    query = (
+        f"(SELECT COALESCE(MAX(event_ts), TIMESTAMP '1970-01-01 00:00:00') AS wm "
+        f"FROM staging.events WHERE source = '{source}') AS t"
+    )
+    try:
+        wm = spark.read.jdbc(jdbc_url, query, properties=props).collect()[0]["wm"]
+        logger.info("Watermark %s : %s", source, wm)
+        return wm
+    except Exception as e:
+        logger.warning("Watermark %s inaccessible : %s — chargement intégral", source, e)
+        return None
+
+
 def main():
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
-    year, month, day = RUN_DATE.split("/")
-    date_str = f"{year}-{int(month):02d}-{int(day):02d}"
-
-    jdbc_url = f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}"
+    jdbc_url   = f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}"
     jdbc_props = {
-        "user":       PG_USER,
-        "password":   PG_PASSWORD,
-        "driver":     "org.postgresql.Driver",
-        "preActions": f"DELETE FROM staging.events WHERE event_ts::date = '{date_str}'",
+        "user":     PG_USER,
+        "password": PG_PASSWORD,
+        "driver":   "org.postgresql.Driver",
     }
 
     frames = []
     for source in SOURCES:
-        path = (
-            f"s3a://{BUCKET}/curated/{source}"
-            f"/year={year}/month={int(month)}/day={int(day)}"
-        )
+        path = f"s3a://{BUCKET}/curated/{source}"
+        wm   = get_watermark(spark, jdbc_url, jdbc_props, source)
         try:
             df = spark.read.parquet(path)
-            frames.append(df)
-            logger.info("Source %s : %d lignes", source, df.count())
+            if wm is not None:
+                df = df.filter(F.col("event_ts") > F.lit(wm))
+            count = df.count()
+            logger.info("Source %s : %d nouveaux événements", source, count)
+            if count > 0:
+                frames.append(df)
         except Exception as e:
-            logger.warning("Pas de donnees %s/%s : %s", source, RUN_DATE, e)
+            logger.warning("Pas de données %s : %s", source, e)
 
     if not frames:
-        logger.warning("Aucune donnee a charger pour %s, arret.", RUN_DATE)
+        logger.warning("Aucune donnée à charger, arrêt.")
         spark.stop()
         sys.exit(0)
 
@@ -87,6 +96,7 @@ def main():
         combined
         .drop("year", "month", "day")
         .withColumn("tags", F.array_join(F.col("tags"), ","))
+        .dropDuplicates(["source", "event_id"])
     )
 
     total = combined.count()
@@ -96,7 +106,7 @@ def main():
         mode="append",
         properties=jdbc_props,
     )
-    logger.info("OK | date=%s lignes=%d", RUN_DATE, total)
+    logger.info("OK | lignes=%d", total)
     spark.stop()
 
 

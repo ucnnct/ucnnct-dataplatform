@@ -16,10 +16,11 @@ Détournement selon docs/Détournement_Expliqué.pdf :
 import logging
 import os
 import sys
-from datetime import date
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+
+from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +32,6 @@ logger = logging.getLogger("normalize-hackernews")
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
 MINIO_USER     = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
-RUN_DATE       = os.getenv("RUN_DATE", date.today().strftime("%Y/%m/%d"))
 BUCKET         = "datalake"
 SOURCE         = "hackernews"
 
@@ -51,21 +51,29 @@ def build_spark():
 
 
 def main():
+    s3       = get_s3_client(MINIO_ENDPOINT, MINIO_USER, MINIO_PASSWORD)
+    last_key = read_bookmark(s3, BUCKET, SOURCE)
+    new_keys = list_new_files(s3, BUCKET, f"raw/{SOURCE}/", last_key)
+
+    if not new_keys:
+        logger.info("Aucun nouveau fichier pour %s, arrêt.", SOURCE)
+        sys.exit(0)
+
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
-    input_path = f"s3a://{BUCKET}/raw/{SOURCE}/{RUN_DATE}/*.jsonl"
-    logger.info("Lecture : %s", input_path)
+    s3a_paths = [f"s3a://{BUCKET}/{k}" for k in new_keys]
+    logger.info("Lecture de %d fichiers", len(s3a_paths))
 
     try:
-        df = spark.read.json(input_path)
+        df = spark.read.json(s3a_paths)
     except Exception as e:
-        logger.warning("Aucun fichier pour %s : %s", RUN_DATE, e)
+        logger.warning("Lecture impossible : %s", e)
         spark.stop()
         sys.exit(0)
 
     if df.limit(1).count() == 0:
-        logger.warning("Aucune donnée pour %s, arrêt.", RUN_DATE)
+        logger.warning("Aucune donnée, arrêt.")
         spark.stop()
         sys.exit(0)
 
@@ -93,8 +101,9 @@ def main():
     )
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
-    normalized.write.mode("overwrite").partitionBy("year", "month", "day").parquet(out_path)
-    logger.info("OK | date=%s sortie=%s", RUN_DATE, out_path)
+    normalized.write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
+    write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
+    logger.info("OK | fichiers=%d sortie=%s", len(new_keys), out_path)
     spark.stop()
 
 
