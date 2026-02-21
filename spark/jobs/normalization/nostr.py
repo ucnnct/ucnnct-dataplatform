@@ -23,7 +23,6 @@ import sys
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import ArrayType, StringType
 
 from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
 
@@ -56,34 +55,6 @@ def build_spark():
     )
 
 
-def _extract_thread_ref(tags):
-    if not tags:
-        return None
-    for tag in tags:
-        if len(tag) >= 4 and tag[0] == "e" and tag[3] == "root":
-            return tag[1]
-    for tag in tags:
-        if len(tag) >= 2 and tag[0] == "e":
-            return tag[1]
-    return None
-
-
-def _extract_parent_ref(tags):
-    if not tags:
-        return None
-    for tag in tags:
-        if len(tag) >= 4 and tag[0] == "e" and tag[3] == "reply":
-            return tag[1]
-    e_tags = [t for t in tags if len(t) >= 2 and t[0] == "e"]
-    return e_tags[-1][1] if e_tags else None
-
-
-def _extract_p_tags(tags):
-    if not tags:
-        return []
-    return [t[1] for t in tags if len(t) >= 2 and t[0] == "p"]
-
-
 def main():
     s3       = get_s3_client(MINIO_ENDPOINT, MINIO_USER, MINIO_PASSWORD)
     last_key = read_bookmark(s3, BUCKET, SOURCE)
@@ -97,9 +68,27 @@ def main():
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
-    udf_thread_ref = F.udf(_extract_thread_ref, StringType())
-    udf_parent_ref = F.udf(_extract_parent_ref, StringType())
-    udf_p_tags     = F.udf(_extract_p_tags, ArrayType(StringType()))
+    # Higher-order functions JVM (pas de Python UDF)
+    thread_ref = F.coalesce(
+        F.element_at(F.transform(
+            F.filter(F.col("tags"), lambda t: (F.size(t) >= 4) & (t[0] == "e") & (t[3] == "root")),
+            lambda t: t[1]), 1),
+        F.element_at(F.transform(
+            F.filter(F.col("tags"), lambda t: (F.size(t) >= 2) & (t[0] == "e")),
+            lambda t: t[1]), 1),
+    )
+    parent_ref = F.coalesce(
+        F.element_at(F.transform(
+            F.filter(F.col("tags"), lambda t: (F.size(t) >= 4) & (t[0] == "e") & (t[3] == "reply")),
+            lambda t: t[1]), 1),
+        F.element_at(F.transform(
+            F.filter(F.col("tags"), lambda t: (F.size(t) >= 2) & (t[0] == "e")),
+            lambda t: t[1]), -1),
+    )
+    p_tags = F.transform(
+        F.filter(F.col("tags"), lambda t: (F.size(t) >= 2) & (t[0] == "p")),
+        lambda t: t[1],
+    )
 
     s3a_paths = [f"s3a://{BUCKET}/{k}" for k in new_keys]
     logger.info("Lecture de %d fichiers", len(s3a_paths))
@@ -123,9 +112,9 @@ def main():
             F.col("id").alias("event_id"),
             F.to_timestamp(F.col("created_at")).alias("event_ts"),
             F.col("kind").cast("string").alias("event_type"),
-            udf_thread_ref(F.col("tags")).alias("thread_id"),
-            udf_parent_ref(F.col("tags")).alias("parent_id"),
-            udf_p_tags(F.col("tags")).alias("tags"),
+            thread_ref.alias("thread_id"),
+            parent_ref.alias("parent_id"),
+            p_tags.alias("tags"),
             F.col("content").alias("text"),
             F.lit(False).cast("boolean").alias("is_help_request"),
             F.lit(False).cast("boolean").alias("is_resolved"),

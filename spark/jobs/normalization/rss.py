@@ -18,7 +18,6 @@ import sys
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import TimestampType
 
 from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
 
@@ -79,33 +78,21 @@ def main():
         spark.stop()
         sys.exit(0)
 
-    @F.udf(TimestampType())
-    def parse_rss_date(s):
-        if not s:
-            return None
-        import datetime as _dt
-        import email.utils as _eu
-        try:
-            t = _eu.mktime_tz(_eu.parsedate_tz(s))
-            if t is not None:
-                return _dt.datetime.utcfromtimestamp(t)
-        except Exception:
-            pass
-        try:
-            d = _dt.datetime.fromisoformat(s)
-            if d.tzinfo:
-                d = d.astimezone(_dt.timezone.utc).replace(tzinfo=None)
-            return d
-        except Exception:
-            pass
-        return None
+    # Parsing RFC 2822 et ISO 8601 sans UDF (JVM natif)
+    parse_date = F.coalesce(
+        F.to_timestamp(F.col("pubDate"), "EEE, dd MMM yyyy HH:mm:ss XX"),
+        F.to_timestamp(F.col("pubDate"), "EEE, d MMM yyyy HH:mm:ss XX"),
+        F.to_timestamp(F.col("pubDate"), "EEE, dd MMM yyyy HH:mm:ss z"),
+        F.to_timestamp(F.col("pubDate"), "EEE, d MMM yyyy HH:mm:ss z"),
+        F.to_timestamp(F.col("pubDate")),
+    )
 
     normalized = (
         df.select(
             F.lit(SOURCE).alias("source"),
             F.col("actor_id").alias("actor_id"),
             F.col("guid").alias("event_id"),
-            parse_rss_date(F.col("pubDate")).alias("event_ts"),
+            parse_date.alias("event_ts"),
             F.lit("article").alias("event_type"),
             F.col("feed_url").alias("thread_id"),
             F.col("link").alias("parent_id"),
