@@ -41,8 +41,8 @@ default_args = {
 }
 
 with DAG(
-    dag_id="dag_collect",
-    schedule_interval="@daily",
+    dag_id="verification-sources",
+    schedule_interval="@hourly",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     default_args=default_args,
@@ -60,7 +60,7 @@ with DAG(
 
     trigger = TriggerDagRunOperator(
         task_id="trigger_transform",
-        trigger_dag_id="dag_transform",
+        trigger_dag_id="normalisation",
         execution_date="{{ ds }}",
         reset_dag_run=True,
         wait_for_completion=False,

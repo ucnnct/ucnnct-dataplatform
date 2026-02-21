@@ -33,12 +33,12 @@ default_args = {
 }
 
 with DAG(
-    dag_id="dag_kpi",
+    dag_id="chargement-staging",
     schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     default_args=default_args,
-    tags=["uconnect", "kpi"],
+    tags=["uconnect"],
 ) as dag:
 
     SparkSubmitOperator(
