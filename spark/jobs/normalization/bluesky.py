@@ -18,9 +18,41 @@ import sys
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    ArrayType,
+    LongType,
+    StringType,
+    StructField,
+    StructType,
+)
 
 from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
 from nettoyage import clean_id, clean_tags, clean_text, quality_filter
+
+
+BLUESKY_SCHEMA = StructType([
+    StructField("did",     StringType(), True),
+    StructField("time_us", LongType(),   True),
+    StructField("kind",    StringType(), True),
+    StructField("commit", StructType([
+        StructField("cid",        StringType(), True),
+        StructField("operation",  StringType(), True),
+        StructField("collection", StringType(), True),
+        StructField("rkey",       StringType(), True),
+        StructField("record", StructType([
+            StructField("text",  StringType(), True),
+            StructField("langs", ArrayType(StringType()), True),
+            StructField("reply", StructType([
+                StructField("parent", StructType([
+                    StructField("uri", StringType(), True),
+                ]), True),
+                StructField("root", StructType([
+                    StructField("uri", StringType(), True),
+                ]), True),
+            ]), True),
+        ]), True),
+    ]), True),
+])
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,7 +100,7 @@ def main():
     logger.info("Lecture de %d fichiers", len(s3a_paths))
 
     try:
-        df = spark.read.json(s3a_paths)
+        df = spark.read.schema(BLUESKY_SCHEMA).json(s3a_paths)
     except Exception as e:
         logger.warning("Lecture impossible : %s", e)
         spark.stop()
