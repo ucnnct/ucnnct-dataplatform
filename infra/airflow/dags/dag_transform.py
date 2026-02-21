@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
@@ -35,6 +36,13 @@ with DAG(
     catchup=False,
     default_args=default_args,
     tags=["uconnect", "spark"],
+    params={
+        "max_date": Param(
+            "",
+            type="string",
+            description="Borne supérieure (format YYYY/MM/DD/YYYYMMDD_HHMM). Vide = traiter tous les nouveaux fichiers.",
+        )
+    },
 ) as dag:
 
     normalize_tasks = [
@@ -49,6 +57,7 @@ with DAG(
                 "MINIO_ENDPOINT": MINIO_ENDPOINT,
                 "MINIO_ROOT_USER": MINIO_USER,
                 "MINIO_ROOT_PASSWORD": MINIO_PASSWORD,
+                "MAX_DATE": "{{ params.max_date }}",
             },
         )
         for source in SOURCES
