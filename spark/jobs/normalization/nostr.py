@@ -37,6 +37,7 @@ logger = logging.getLogger("normalize-nostr")
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
 MINIO_USER     = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
+MAX_DATE       = os.getenv("MAX_DATE")  # ex: "2026/02/20/20260220_1200" — None = pas de borne
 BUCKET         = "datalake"
 SOURCE         = "nostr"
 
@@ -86,7 +87,8 @@ def _extract_p_tags(tags):
 def main():
     s3       = get_s3_client(MINIO_ENDPOINT, MINIO_USER, MINIO_PASSWORD)
     last_key = read_bookmark(s3, BUCKET, SOURCE)
-    new_keys = list_new_files(s3, BUCKET, f"raw/{SOURCE}/", last_key)
+    end_key  = f"raw/{SOURCE}/{MAX_DATE}" if MAX_DATE else None
+    new_keys = list_new_files(s3, BUCKET, f"raw/{SOURCE}/", last_key, end_key)
 
     if not new_keys:
         logger.info("Aucun nouveau fichier pour %s, arrêt.", SOURCE)

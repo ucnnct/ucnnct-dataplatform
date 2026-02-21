@@ -51,11 +51,12 @@ def write_bookmark(s3, bucket, name, last_key):
     logger.info("Bookmark '%s' mis à jour : last_key=%s", name, last_key)
 
 
-def list_new_files(s3, bucket, prefix, last_key=None, suffix=".jsonl"):
+def list_new_files(s3, bucket, prefix, last_key=None, end_key=None, suffix=".jsonl"):
     """
-    Liste les fichiers nouveaux depuis last_key.
-    Tri alphabétique = tri chronologique (chemins contiennent YYYY/MM/DD).
+    Liste les fichiers nouveaux depuis last_key jusqu'à end_key (exclu).
+    Tri alphabétique = tri chronologique (chemins contiennent YYYY/MM/DD/YYYYMMDD_HHMMSS).
     Gère automatiquement la pagination (> 1000 objets).
+    end_key=None signifie pas de borne supérieure (traitement jusqu'au dernier fichier).
     """
     paginator = s3.get_paginator("list_objects_v2")
     all_keys  = []
@@ -65,10 +66,14 @@ def list_new_files(s3, bucket, prefix, last_key=None, suffix=".jsonl"):
                 all_keys.append(obj["Key"])
 
     all_keys.sort()
-    new_keys = all_keys if last_key is None else [k for k in all_keys if k > last_key]
+    new_keys = [
+        k for k in all_keys
+        if (last_key is None or k > last_key)
+        and (end_key is None or k < end_key)
+    ]
 
     logger.info(
-        "Prefix '%s' — total: %d, nouveaux: %d",
-        prefix, len(all_keys), len(new_keys),
+        "Prefix '%s' — total: %d, nouveaux: %d (last_key=%s, end_key=%s)",
+        prefix, len(all_keys), len(new_keys), last_key, end_key,
     )
     return new_keys
