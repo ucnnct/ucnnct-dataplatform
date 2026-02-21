@@ -21,6 +21,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
 from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
+from nettoyage import clean_id, clean_tags, clean_html_text, quality_filter
 
 logging.basicConfig(
     level=logging.INFO,
@@ -92,24 +93,34 @@ def main():
         F.coalesce(F.col("is_accepted"), F.lit(False))
     )
 
+    normalized = df.select(
+        F.lit(SOURCE).alias("source"),
+        F.col("owner.user_id").cast("string").alias("actor_id"),
+        event_id.alias("event_id"),
+        F.to_timestamp(F.col("creation_date")).alias("event_ts"),
+        F.col("post_type").alias("event_type"),
+        thread_id.alias("thread_id"),
+        parent_id.alias("parent_id"),
+        F.col("tags").alias("tags"),
+        F.col("body").alias("text"),
+        is_question.alias("is_help_request"),
+        is_resolved.alias("is_resolved"),
+    )
     normalized = (
-        df.select(
-            F.lit(SOURCE).alias("source"),
-            F.col("owner.user_id").cast("string").alias("actor_id"),
-            event_id.alias("event_id"),
-            F.to_timestamp(F.col("creation_date")).alias("event_ts"),
-            F.col("post_type").alias("event_type"),
-            thread_id.alias("thread_id"),
-            parent_id.alias("parent_id"),
-            F.col("tags").alias("tags"),
-            F.col("body").alias("text"),
-            is_question.alias("is_help_request"),
-            is_resolved.alias("is_resolved"),
-        )
+        normalized
+        .withColumn("actor_id",  clean_id(F.col("actor_id")))
+        .withColumn("event_id",  clean_id(F.col("event_id")))
+        .withColumn("thread_id", clean_id(F.col("thread_id")))
+        .withColumn("parent_id", clean_id(F.col("parent_id")))
+        .withColumn("tags",      clean_tags(F.col("tags")))
+        .withColumn("text",      clean_html_text(F.col("text")))
+    )
+    normalized = quality_filter(normalized)
+    normalized = (
+        normalized
         .withColumn("year",  F.year("event_ts"))
         .withColumn("month", F.month("event_ts"))
         .withColumn("day",   F.dayofmonth("event_ts"))
-        .filter(F.col("event_ts").isNotNull() & (F.col("event_ts") <= F.current_timestamp()))
     )
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"

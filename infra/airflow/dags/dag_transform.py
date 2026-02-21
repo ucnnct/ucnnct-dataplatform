@@ -40,7 +40,7 @@ with DAG(
         "max_date": Param(
             "",
             type="string",
-            description="Borne supérieure (format YYYY/MM/DD/YYYYMMDD_HHMM). Vide = traiter tous les nouveaux fichiers.",
+            description="Borne supérieure (format YYYY/MM/DD/YYYYMMDD_HHMM). Vide = pas de borne.",
         )
     },
 ) as dag:
@@ -51,7 +51,10 @@ with DAG(
             application=f"/opt/spark/jobs/normalization/{source}.py",
             conn_id="spark_default",
             jars=JARS,
-            py_files="/opt/spark/jobs/bookmark.py",
+            py_files=(
+                "/opt/spark/jobs/bookmark.py,"
+                "/opt/spark/jobs/nettoyage.py"
+            ),
             verbose=True,
             env_vars={
                 "MINIO_ENDPOINT": MINIO_ENDPOINT,
