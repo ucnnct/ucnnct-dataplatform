@@ -79,6 +79,12 @@ with DAG(
         application="/opt/spark/jobs/load_postgres.py",
         conn_id="spark_default",
         jars=JARS,
+        executor_memory="3g",
+        driver_memory="2g",
+        conf={
+            "spark.executor.memoryOverhead": "512m",
+            "spark.sql.shuffle.partitions": "20",
+        },
         verbose=True,
         env_vars={
             "MINIO_ENDPOINT": MINIO_ENDPOINT,

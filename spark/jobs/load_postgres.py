@@ -124,7 +124,9 @@ def main():
             combined.drop("year", "month", "day")
             .withColumn("tags", F.array_join(F.col("tags"), ","))
             .dropDuplicates(["source", "event_id"])
+            .repartition(20)
         )
+        combined.cache()
 
         # Anti-join contre les clés déjà en base pour éviter les doublons
         try:
@@ -148,7 +150,7 @@ def main():
                 "Anti-join impossible — poursuite sans filtre", exc_info=True
             )
 
-        combined.write.option("batchsize", "20000").option("numPartitions", "4").jdbc(
+        combined.write.option("batchsize", "10000").option("numPartitions", "8").jdbc(
             url=jdbc_url,
             table="staging.events",
             mode="append",
