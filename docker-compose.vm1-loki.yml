@@ -186,7 +186,6 @@ services:
   consumer-bluesky:
     build: ./consumers/bluesky
     image: ghcr.io/ucnnct/uconnect-consumer-bluesky:latest
-    container_name: uconnect-consumer-bluesky
     depends_on:
       kafka:
         condition: service_healthy
@@ -198,8 +197,8 @@ services:
       MINIO_ENDPOINT: "172.31.250.57:9000"
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      BATCH_SIZE: "200000"
-      FLUSH_INTERVAL: "1200"
+      BATCH_SIZE: "410000"
+      FLUSH_INTERVAL: "1800"
     networks:
       - uconnect-net
     restart: unless-stopped
