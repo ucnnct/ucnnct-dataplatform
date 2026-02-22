@@ -1,6 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt .
+COPY stackoverflow/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py .
+COPY consumer_base.py .
+COPY stackoverflow/main.py .
 CMD ["python", "main.py"]

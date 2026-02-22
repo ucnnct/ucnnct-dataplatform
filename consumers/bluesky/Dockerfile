@@ -1,6 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt .
+COPY bluesky/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py .
+COPY consumer_base.py .
+COPY bluesky/main.py .
 CMD ["python", "main.py"]
