@@ -98,6 +98,28 @@ def main():
             .dropDuplicates(["source", "event_id"])
         )
 
+        # Anti-join contre les clés déjà en base pour éviter les doublons
+        try:
+            existing = spark.read.jdbc(
+                jdbc_url,
+                "(SELECT source, event_id FROM staging.events) AS t",
+                properties=jdbc_props,
+            )
+            before = combined.count()
+            combined = combined.join(
+                existing, on=["source", "event_id"], how="left_anti"
+            )
+            after = combined.count()
+            logger.info(
+                "Anti-join : %d lignes filtrées (déjà en base), %d à insérer",
+                before - after,
+                after,
+            )
+        except Exception:
+            logger.warning(
+                "Anti-join impossible — poursuite sans filtre", exc_info=True
+            )
+
         combined.write.option("batchsize", "10000").jdbc(
             url=jdbc_url,
             table="staging.events",
