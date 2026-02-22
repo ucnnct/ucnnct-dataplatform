@@ -32,13 +32,18 @@ BUCKET = "datalake"
 ALL_SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
 
 _sources_env = os.getenv("LOAD_SOURCES", "").strip()
-SOURCES = (
-    [s.strip() for s in _sources_env.split(",") if s.strip()]
-    if _sources_env
-    else ALL_SOURCES
-)
+_sources_list = [
+    s.strip()
+    for s in _sources_env.split(",")
+    if s.strip() and s.strip().lower() != "none"
+]
+SOURCES = _sources_list if _sources_list else ALL_SOURCES
 DATE_DEBUT = os.getenv("LOAD_DATE_DEBUT", "").strip() or None
+if DATE_DEBUT and DATE_DEBUT.lower() == "none":
+    DATE_DEBUT = None
 DATE_FIN = os.getenv("LOAD_DATE_FIN", "").strip() or None
+if DATE_FIN and DATE_FIN.lower() == "none":
+    DATE_FIN = None
 
 
 def build_spark():
