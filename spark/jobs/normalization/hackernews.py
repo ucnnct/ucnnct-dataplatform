@@ -75,7 +75,8 @@ def main():
         spark.stop()
         sys.exit(0)
 
-    if df.limit(1).count() == 0:
+    count_before = df.count()
+    if count_before == 0:
         logger.warning("Aucune donnée, arrêt.")
         spark.stop()
         sys.exit(0)
@@ -113,9 +114,17 @@ def main():
     )
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
+    normalized = normalized.cache()
+    count_after = normalized.count()
     normalized.write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
+    normalized.unpersist()
     write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
-    logger.info("OK | fichiers=%d sortie=%s", len(new_keys), out_path)
+    rejected = count_before - count_after
+    pct = (rejected / count_before * 100) if count_before > 0 else 0
+    logger.info(
+        "OK | fichiers=%d reçus=%d traités=%d rejetés=%d (%.1f%%) sortie=%s",
+        len(new_keys), count_before, count_after, rejected, pct, out_path,
+    )
     spark.stop()
 
 
