@@ -123,13 +123,18 @@ def main():
                 "Anti-join impossible — poursuite sans filtre", exc_info=True
             )
 
-        combined.write.option("batchsize", "50000").option("numPartitions", "8").jdbc(
+        combined.write.option("batchsize", "20000").option("numPartitions", "4").jdbc(
             url=jdbc_url,
             table="staging.events",
             mode="append",
             properties=jdbc_props,
         )
-        logger.info("OK | chargement terminé")
+        total = spark.read.jdbc(
+            jdbc_url,
+            "(SELECT COUNT(*) AS cnt FROM staging.events) AS t",
+            properties=jdbc_props,
+        ).collect()[0]["cnt"]
+        logger.info("OK | chargement terminé | total en base : %d", total)
     finally:
         spark.stop()
 
