@@ -35,6 +35,9 @@ consumer = Consumer({
     "group.id": KAFKA_GROUP,
     "auto.offset.reset": "earliest",
     "enable.auto.commit": False,
+    "session.timeout.ms": "300000",
+    "max.poll.interval.ms": "600000",
+    "heartbeat.interval.ms": "10000",
 })
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_USER, secret_key=MINIO_PASSWORD, secure=False)
@@ -76,10 +79,9 @@ def consume():
                         buffer.append(json.loads(msg.value()))
                     except json.JSONDecodeError:
                         logger.warning("Message JSON invalide | key=%s", key)
-                consumer.commit(asynchronous=True)
-
             if len(buffer) >= BATCH_SIZE or (buffer and time.time() - last_flush >= FLUSH_INTERVAL):
                 flush(buffer)
+                consumer.commit(asynchronous=False)
                 buffer = []
                 last_flush = time.time()
 
