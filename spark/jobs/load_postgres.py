@@ -65,11 +65,14 @@ def main():
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
-    jdbc_url = f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}"
+    jdbc_url = (
+        f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}" f"?reWriteBatchedInserts=true"
+    )
     jdbc_props = {
         "user": PG_USER,
         "password": PG_PASSWORD,
         "driver": "org.postgresql.Driver",
+        "isolationLevel": "READ_UNCOMMITTED",
     }
 
     try:
@@ -120,7 +123,7 @@ def main():
                 "Anti-join impossible — poursuite sans filtre", exc_info=True
             )
 
-        combined.write.option("batchsize", "10000").jdbc(
+        combined.write.option("batchsize", "50000").option("numPartitions", "8").jdbc(
             url=jdbc_url,
             table="staging.events",
             mode="append",
