@@ -16,21 +16,26 @@ logger = logging.getLogger("collector.rss")
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 TOPIC = "uconnect.datalake.raw.rss"
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
-RSS_FEEDS = os.getenv("RSS_FEEDS", ",".join([
-    "https://dev.to/feed",
-    "https://hnrss.org/frontpage",
-    "https://lobste.rs/rss",
-    "https://www.reddit.com/r/machinelearning/.rss",
-    "https://www.reddit.com/r/datascience/.rss",
-    "https://aws.amazon.com/blogs/aws/feed/",
-    "https://github.blog/feed/",
-    "https://techcrunch.com/feed/",
-    "https://stackoverflow.blog/feed/",
-    "https://www.theverge.com/rss/index.xml",
-    "https://www.wired.com/feed/rss",
-    "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "http://feeds.reuters.com/reuters/topNews",
-])).split(",")
+RSS_FEEDS = os.getenv(
+    "RSS_FEEDS",
+    ",".join(
+        [
+            "https://dev.to/feed",
+            "https://hnrss.org/frontpage",
+            "https://lobste.rs/rss",
+            "https://www.reddit.com/r/machinelearning/.rss",
+            "https://www.reddit.com/r/datascience/.rss",
+            "https://aws.amazon.com/blogs/aws/feed/",
+            "https://github.blog/feed/",
+            "https://techcrunch.com/feed/",
+            "https://stackoverflow.blog/feed/",
+            "https://www.theverge.com/rss/index.xml",
+            "https://www.wired.com/feed/rss",
+            "https://feeds.bbci.co.uk/news/world/rss.xml",
+            "http://feeds.reuters.com/reuters/topNews",
+        ]
+    ),
+).split(",")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; uconnect-rss-collector/1.0)"}
 
@@ -39,8 +44,12 @@ producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
 
 def delivery_report(err, msg):
     if err:
-        logger.error("Échec de livraison vers Kafka | topic=%s partition=%s erreur=%s",
-                     msg.topic(), msg.partition(), err)
+        logger.error(
+            "Échec de livraison vers Kafka | topic=%s partition=%s erreur=%s",
+            msg.topic(),
+            msg.partition(),
+            err,
+        )
 
 
 def parse_date(entry):
@@ -73,7 +82,11 @@ def build_payload(entry, feed_url, feed_title):
 
 def collect():
     seen = set()
-    logger.info("Début de la collecte | feeds=%d poll_interval=%ds", len(RSS_FEEDS), POLL_INTERVAL)
+    logger.info(
+        "Début de la collecte | feeds=%d poll_interval=%ds",
+        len(RSS_FEEDS),
+        POLL_INTERVAL,
+    )
     while True:
         cycle_total = 0
         for feed_url in RSS_FEEDS:
@@ -82,8 +95,11 @@ def collect():
                 feed_title = feed.feed.get("title", feed_url)
 
                 if feed.bozo:
-                    logger.warning("Feed malformé ignoré | feed=%s erreur=%s",
-                                   feed_title, feed.bozo_exception)
+                    logger.warning(
+                        "Feed malformé ignoré | feed=%s erreur=%s",
+                        feed_title,
+                        feed.bozo_exception,
+                    )
                     continue
 
                 count = 0
@@ -104,20 +120,34 @@ def collect():
 
                 producer.flush()
                 if count > 0:
-                    logger.info("Feed traité | feed=%s nouveaux_items=%d", feed_title, count)
+                    logger.info(
+                        "Feed traité | feed=%s nouveaux_items=%d", feed_title, count
+                    )
                 else:
                     logger.debug("Aucun nouvel item | feed=%s", feed_title)
                 cycle_total += count
 
             except Exception as e:
-                logger.error("Erreur lors de la lecture du feed | feed=%s type=%s message=%s",
-                             feed_url, type(e).__name__, e)
+                logger.error(
+                    "Erreur lors de la lecture du feed | feed=%s type=%s message=%s",
+                    feed_url,
+                    type(e).__name__,
+                    e,
+                )
 
-        logger.info("Cycle terminé | total_nouveaux=%d total_vus=%d prochaine_collecte=%ds",
-                    cycle_total, len(seen), POLL_INTERVAL)
+        logger.info(
+            "Cycle terminé | total_nouveaux=%d total_vus=%d prochaine_collecte=%ds",
+            cycle_total,
+            len(seen),
+            POLL_INTERVAL,
+        )
         time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
-    logger.info("Démarrage du collecteur | source=rss topic=%s feeds=%d version=1.1.0", TOPIC, len(RSS_FEEDS))
+    logger.info(
+        "Démarrage du collecteur | source=rss topic=%s feeds=%d version=1.1.0",
+        TOPIC,
+        len(RSS_FEEDS),
+    )
     collect()

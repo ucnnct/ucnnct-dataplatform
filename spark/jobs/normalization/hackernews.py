@@ -13,6 +13,7 @@ Détournement selon docs/Détournement_Expliqué.pdf :
   is_help_request : type == "ask"
   is_resolved     : type == "ask" AND descendants > 0
 """
+
 import logging
 import os
 import sys
@@ -25,15 +26,6 @@ from nettoyage import clean_id, clean_html_text, quality_filter
 
 logging.basicConfig(
     level=logging.INFO,
-
-
-
-
-
-
-
-
-    
     format="%(asctime)s [%(levelname)s] %(name)s : %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
@@ -49,8 +41,7 @@ SOURCE = "hackernews"
 
 def build_spark():
     return (
-        SparkSession.builder
-        .appName(f"normalize-{SOURCE}")
+        SparkSession.builder.appName(f"normalize-{SOURCE}")
         .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
         .config("spark.hadoop.fs.s3a.access.key", MINIO_USER)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_PASSWORD)
@@ -91,7 +82,11 @@ def main():
         sys.exit(0)
 
     is_ask = F.col("type") == "ask"
-    parent_col = F.col("parent").cast("string") if "parent" in df.columns else F.lit(None).cast("string")
+    parent_col = (
+        F.col("parent").cast("string")
+        if "parent" in df.columns
+        else F.lit(None).cast("string")
+    )
 
     normalized = df.select(
         F.lit(SOURCE).alias("source"),
@@ -104,35 +99,42 @@ def main():
         F.lit(None).cast("array<string>").alias("tags"),
         F.coalesce(F.col("text"), F.col("title")).alias("text"),
         is_ask.alias("is_help_request"),
-        (is_ask & (F.coalesce(F.col("descendants"), F.lit(0)) > 0)).alias("is_resolved"),
+        (is_ask & (F.coalesce(F.col("descendants"), F.lit(0)) > 0)).alias(
+            "is_resolved"
+        ),
     )
     normalized = (
-        normalized
-        .withColumn("actor_id",  clean_id(F.col("actor_id")))
-        .withColumn("event_id",  clean_id(F.col("event_id")))
+        normalized.withColumn("actor_id", clean_id(F.col("actor_id")))
+        .withColumn("event_id", clean_id(F.col("event_id")))
         .withColumn("thread_id", clean_id(F.col("thread_id")))
         .withColumn("parent_id", clean_id(F.col("parent_id")))
-        .withColumn("text",      clean_html_text(F.col("text")))
+        .withColumn("text", clean_html_text(F.col("text")))
     )
     normalized = quality_filter(normalized)
     normalized = (
-        normalized
-        .withColumn("year",  F.year("event_ts"))
+        normalized.withColumn("year", F.year("event_ts"))
         .withColumn("month", F.month("event_ts"))
-        .withColumn("day",   F.dayofmonth("event_ts"))
+        .withColumn("day", F.dayofmonth("event_ts"))
     )
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
     normalized = normalized.cache()
     count_after = normalized.count()
-    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
+    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy(
+        "year", "month", "day"
+    ).parquet(out_path)
     normalized.unpersist()
     write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
     rejected = count_before - count_after
     pct = (rejected / count_before * 100) if count_before > 0 else 0
     logger.info(
         "OK | fichiers=%d reçus=%d traités=%d rejetés=%d (%.1f%%) sortie=%s",
-        len(new_keys), count_before, count_after, rejected, pct, out_path,
+        len(new_keys),
+        count_before,
+        count_after,
+        rejected,
+        pct,
+        out_path,
     )
     spark.stop()
 

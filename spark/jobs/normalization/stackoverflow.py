@@ -7,12 +7,14 @@ Détournement selon docs/Détournement_Expliqué.pdf :
   creation_date   -> event_ts     (Unix secondes -> timestamp)
   post_type       -> event_type   ("question" | "answer")
   thread_id       -> thread_id    (question_id dans les deux cas)
-  parent_id       -> parent_id    (question_id pour les réponses, null pour les questions)
+  parent_id       -> parent_id    (question_id pour les réponses,
+                      null pour les questions)
   tags            -> tags         (array<string>, présent uniquement sur les questions)
   body            -> text
   is_help_request : post_type == "question"
   is_resolved     : answer_count > 0 (questions) | is_accepted == True (réponses)
 """
+
 import logging
 import os
 import sys
@@ -40,8 +42,7 @@ SOURCE = "stackoverflow"
 
 def build_spark():
     return (
-        SparkSession.builder
-        .appName(f"normalize-{SOURCE}")
+        SparkSession.builder.appName(f"normalize-{SOURCE}")
         .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
         .config("spark.hadoop.fs.s3a.access.key", MINIO_USER)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_PASSWORD)
@@ -83,16 +84,20 @@ def main():
 
     is_question = F.col("post_type") == "question"
 
-    event_id = F.when(is_question, F.col("question_id")).otherwise(F.col("answer_id")).cast("string")
+    event_id = (
+        F.when(is_question, F.col("question_id"))
+        .otherwise(F.col("answer_id"))
+        .cast("string")
+    )
     thread_id = F.col("question_id").cast("string")
-    parent_id = F.when(~is_question, F.col("question_id").cast("string")).otherwise(F.lit(None))
+    parent_id = F.when(~is_question, F.col("question_id").cast("string")).otherwise(
+        F.lit(None)
+    )
 
     is_resolved = F.when(
         is_question,
         F.coalesce(F.col("answer_count"), F.lit(0)) > 0,
-    ).otherwise(
-        F.coalesce(F.col("is_accepted"), F.lit(False))
-    )
+    ).otherwise(F.coalesce(F.col("is_accepted"), F.lit(False)))
 
     normalized = df.select(
         F.lit(SOURCE).alias("source"),
@@ -108,33 +113,38 @@ def main():
         is_resolved.alias("is_resolved"),
     )
     normalized = (
-        normalized
-        .withColumn("actor_id",  clean_id(F.col("actor_id")))
-        .withColumn("event_id",  clean_id(F.col("event_id")))
+        normalized.withColumn("actor_id", clean_id(F.col("actor_id")))
+        .withColumn("event_id", clean_id(F.col("event_id")))
         .withColumn("thread_id", clean_id(F.col("thread_id")))
         .withColumn("parent_id", clean_id(F.col("parent_id")))
-        .withColumn("tags",      clean_tags(F.col("tags")))
-        .withColumn("text",      clean_html_text(F.col("text")))
+        .withColumn("tags", clean_tags(F.col("tags")))
+        .withColumn("text", clean_html_text(F.col("text")))
     )
     normalized = quality_filter(normalized)
     normalized = (
-        normalized
-        .withColumn("year",  F.year("event_ts"))
+        normalized.withColumn("year", F.year("event_ts"))
         .withColumn("month", F.month("event_ts"))
-        .withColumn("day",   F.dayofmonth("event_ts"))
+        .withColumn("day", F.dayofmonth("event_ts"))
     )
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
     normalized = normalized.cache()
     count_after = normalized.count()
-    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
+    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy(
+        "year", "month", "day"
+    ).parquet(out_path)
     normalized.unpersist()
     write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
     rejected = count_before - count_after
     pct = (rejected / count_before * 100) if count_before > 0 else 0
     logger.info(
         "OK | fichiers=%d reçus=%d traités=%d rejetés=%d (%.1f%%) sortie=%s",
-        len(new_keys), count_before, count_after, rejected, pct, out_path,
+        len(new_keys),
+        count_before,
+        count_after,
+        rejected,
+        pct,
+        out_path,
     )
     spark.stop()
 

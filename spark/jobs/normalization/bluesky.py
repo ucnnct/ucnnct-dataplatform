@@ -12,6 +12,7 @@ Détournement selon docs/Détournement_Expliqué.pdf :
   commit.record.text              -> text
   is_help_request / is_resolved   -> False
 """
+
 import logging
 import os
 import sys
@@ -29,30 +30,65 @@ from pyspark.sql.types import (
 from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
 from nettoyage import clean_id, clean_tags, clean_text
 
-
-BLUESKY_SCHEMA = StructType([
-    StructField("did",     StringType(), True),
-    StructField("time_us", LongType(),   True),
-    StructField("kind",    StringType(), True),
-    StructField("commit", StructType([
-        StructField("cid",        StringType(), True),
-        StructField("operation",  StringType(), True),
-        StructField("collection", StringType(), True),
-        StructField("rkey",       StringType(), True),
-        StructField("record", StructType([
-            StructField("text",  StringType(), True),
-            StructField("langs", ArrayType(StringType()), True),
-            StructField("reply", StructType([
-                StructField("parent", StructType([
-                    StructField("uri", StringType(), True),
-                ]), True),
-                StructField("root", StructType([
-                    StructField("uri", StringType(), True),
-                ]), True),
-            ]), True),
-        ]), True),
-    ]), True),
-])
+BLUESKY_SCHEMA = StructType(
+    [
+        StructField("did", StringType(), True),
+        StructField("time_us", LongType(), True),
+        StructField("kind", StringType(), True),
+        StructField(
+            "commit",
+            StructType(
+                [
+                    StructField("cid", StringType(), True),
+                    StructField("operation", StringType(), True),
+                    StructField("collection", StringType(), True),
+                    StructField("rkey", StringType(), True),
+                    StructField(
+                        "record",
+                        StructType(
+                            [
+                                StructField("text", StringType(), True),
+                                StructField("langs", ArrayType(StringType()), True),
+                                StructField(
+                                    "reply",
+                                    StructType(
+                                        [
+                                            StructField(
+                                                "parent",
+                                                StructType(
+                                                    [
+                                                        StructField(
+                                                            "uri", StringType(), True
+                                                        ),
+                                                    ]
+                                                ),
+                                                True,
+                                            ),
+                                            StructField(
+                                                "root",
+                                                StructType(
+                                                    [
+                                                        StructField(
+                                                            "uri", StringType(), True
+                                                        ),
+                                                    ]
+                                                ),
+                                                True,
+                                            ),
+                                        ]
+                                    ),
+                                    True,
+                                ),
+                            ]
+                        ),
+                        True,
+                    ),
+                ]
+            ),
+            True,
+        ),
+    ]
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,8 +107,7 @@ SOURCE = "bluesky"
 
 def build_spark():
     return (
-        SparkSession.builder
-        .appName(f"normalize-{SOURCE}")
+        SparkSession.builder.appName(f"normalize-{SOURCE}")
         .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
         .config("spark.hadoop.fs.s3a.access.key", MINIO_USER)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_PASSWORD)
@@ -126,46 +161,56 @@ def main():
         F.lit(False).cast("boolean").alias("is_resolved"),
     )
     normalized = (
-        normalized
-        .withColumn("actor_id",  clean_id(F.col("actor_id")))
-        .withColumn("event_id",  clean_id(F.col("event_id")))
+        normalized.withColumn("actor_id", clean_id(F.col("actor_id")))
+        .withColumn("event_id", clean_id(F.col("event_id")))
         .withColumn("thread_id", clean_id(F.col("thread_id")))
         .withColumn("parent_id", clean_id(F.col("parent_id")))
-        .withColumn("tags",      clean_tags(F.col("tags")))
-        .withColumn("text",      clean_text(F.col("text")))
+        .withColumn("tags", clean_tags(F.col("tags")))
+        .withColumn("text", clean_text(F.col("text")))
     )
     # Pour les posts : text requis. Pour likes/follows : text peut être null.
     is_post = F.col("event_type") == "app.bsky.feed.post"
     now = F.current_timestamp()
     normalized = (
-        normalized
-        .filter(
-            F.col("event_id").isNotNull() & (F.length(F.col("event_id")) > 0) &
-            F.col("actor_id").isNotNull() & (F.length(F.col("actor_id")) > 0) &
-            F.col("event_ts").isNotNull() & (F.year(F.col("event_ts")) >= 2020) &
-            (~is_post | (F.col("text").isNotNull() & (F.length(F.col("text")) > 0)))
+        normalized.filter(
+            F.col("event_id").isNotNull()
+            & (F.length(F.col("event_id")) > 0)
+            & F.col("actor_id").isNotNull()
+            & (F.length(F.col("actor_id")) > 0)
+            & F.col("event_ts").isNotNull()
+            & (F.year(F.col("event_ts")) >= 2020)
+            & (~is_post | (F.col("text").isNotNull() & (F.length(F.col("text")) > 0)))
         )
-        .withColumn("event_ts", F.when(F.col("event_ts") > now, now).otherwise(F.col("event_ts")))
+        .withColumn(
+            "event_ts",
+            F.when(F.col("event_ts") > now, now).otherwise(F.col("event_ts")),
+        )
         .dropDuplicates(["source", "event_id"])
     )
     normalized = (
-        normalized
-        .withColumn("year",  F.year("event_ts"))
+        normalized.withColumn("year", F.year("event_ts"))
         .withColumn("month", F.month("event_ts"))
-        .withColumn("day",   F.dayofmonth("event_ts"))
+        .withColumn("day", F.dayofmonth("event_ts"))
     )
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
     normalized = normalized.cache()
     count_after = normalized.count()
-    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
+    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy(
+        "year", "month", "day"
+    ).parquet(out_path)
     normalized.unpersist()
     write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
     rejected = count_before - count_after
     pct = (rejected / count_before * 100) if count_before > 0 else 0
     logger.info(
         "OK | fichiers=%d reçus=%d traités=%d rejetés=%d (%.1f%%) sortie=%s",
-        len(new_keys), count_before, count_after, rejected, pct, out_path,
+        len(new_keys),
+        count_before,
+        count_after,
+        rejected,
+        pct,
+        out_path,
     )
     spark.stop()
 

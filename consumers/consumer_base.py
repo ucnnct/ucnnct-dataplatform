@@ -33,20 +33,24 @@ def run(source: str, topic: str, group: str) -> None:
 
     logger = logging.getLogger(f"consumer.{source}")
 
-    consumer = Consumer({
-        "bootstrap.servers": KAFKA_BOOTSTRAP,
-        "group.id": group,
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,
-        "session.timeout.ms": "300000",
-        "max.poll.interval.ms": "600000",
-        "heartbeat.interval.ms": "10000",
-        "fetch.min.bytes": "1048576",
-        "fetch.max.wait.ms": "500",
-        "max.partition.fetch.bytes": "10485760",
-    })
+    consumer = Consumer(
+        {
+            "bootstrap.servers": KAFKA_BOOTSTRAP,
+            "group.id": group,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,
+            "session.timeout.ms": "300000",
+            "max.poll.interval.ms": "600000",
+            "heartbeat.interval.ms": "10000",
+            "fetch.min.bytes": "1048576",
+            "fetch.max.wait.ms": "500",
+            "max.partition.fetch.bytes": "10485760",
+        }
+    )
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-    minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_USER, secret_key=MINIO_PASSWORD, secure=False)
+    minio_client = Minio(
+        MINIO_ENDPOINT, access_key=MINIO_USER, secret_key=MINIO_PASSWORD, secure=False
+    )
 
     def flush(buffer):
         now = datetime.now(timezone.utc)
@@ -57,8 +61,11 @@ def run(source: str, topic: str, group: str) -> None:
         content = "\n".join(json.dumps(r) for r in buffer).encode("utf-8")
         try:
             minio_client.put_object(
-                BUCKET, path, data=BytesIO(content),
-                length=len(content), content_type="application/x-ndjson",
+                BUCKET,
+                path,
+                data=BytesIO(content),
+                length=len(content),
+                content_type="application/x-ndjson",
             )
             logger.info("Flush MinIO | path=%s records=%d", path, len(buffer))
         except Exception as exc:
@@ -70,7 +77,11 @@ def run(source: str, topic: str, group: str) -> None:
     last_flush = time.time()
     logger.info(
         "Démarrage | source=%s topic=%s group=%s batch=%d interval=%ds",
-        source, topic, group, BATCH_SIZE, FLUSH_INTERVAL,
+        source,
+        topic,
+        group,
+        BATCH_SIZE,
+        FLUSH_INTERVAL,
     )
 
     try:
@@ -98,7 +109,9 @@ def run(source: str, topic: str, group: str) -> None:
                 except json.JSONDecodeError:
                     logger.warning("Message JSON invalide | key=%s", key)
 
-            if len(buffer) >= BATCH_SIZE or (buffer and time.time() - last_flush >= FLUSH_INTERVAL):
+            if len(buffer) >= BATCH_SIZE or (
+                buffer and time.time() - last_flush >= FLUSH_INTERVAL
+            ):
                 flush(buffer)
                 consumer.commit(asynchronous=False)
                 buffer = []

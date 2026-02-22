@@ -5,6 +5,7 @@ Declenche par dag_collect.
 Soumet les jobs Spark via SparkSubmitOperator (spark://spark-master:7077).
 Pipeline : dag_collect -> dag_transform -> dag_kpi
 """
+
 import os
 from datetime import datetime, timedelta
 
@@ -13,10 +14,10 @@ from airflow.models.param import Param
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT",     "172.31.250.57:9000")
-MINIO_USER     = os.getenv("MINIO_ROOT_USER",    "")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
+MINIO_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
-SOURCES        = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
+SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
 
 JARS = (
     "/opt/spark/jars/hadoop-aws-3.3.4.jar,"
@@ -40,7 +41,10 @@ with DAG(
         "max_date": Param(
             "",
             type="string",
-            description="Borne supérieure (format YYYY/MM/DD/YYYYMMDD_HHMM). Vide = pas de borne.",
+            description=(
+                "Borne supérieure (format YYYY/MM/DD/YYYYMMDD_HHMM)."
+                " Vide = pas de borne."
+            ),
         )
     },
 ) as dag:
@@ -51,10 +55,7 @@ with DAG(
             application=f"/opt/spark/jobs/normalization/{source}.py",
             conn_id="spark_default",
             jars=JARS,
-            py_files=(
-                "/opt/spark/jobs/bookmark.py,"
-                "/opt/spark/jobs/nettoyage.py"
-            ),
+            py_files=("/opt/spark/jobs/bookmark.py," "/opt/spark/jobs/nettoyage.py"),
             verbose=True,
             env_vars={
                 "MINIO_ENDPOINT": MINIO_ENDPOINT,

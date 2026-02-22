@@ -5,6 +5,7 @@ Pour chaque source, lit le MAX(event_ts) dans staging.events (watermark),
 puis charge uniquement les événements plus récents depuis curated Parquet.
 Déduplication (source, event_id) avant écriture JDBC.
 """
+
 import logging
 import os
 from functools import reduce
@@ -33,13 +34,12 @@ SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
 
 def build_spark():
     return (
-        SparkSession.builder
-        .appName("load-postgres")
-        .config("spark.hadoop.fs.s3a.endpoint",          f"http://{MINIO_ENDPOINT}")
-        .config("spark.hadoop.fs.s3a.access.key",        MINIO_USER)
-        .config("spark.hadoop.fs.s3a.secret.key",        MINIO_PASSWORD)
+        SparkSession.builder.appName("load-postgres")
+        .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
+        .config("spark.hadoop.fs.s3a.access.key", MINIO_USER)
+        .config("spark.hadoop.fs.s3a.secret.key", MINIO_PASSWORD)
         .config("spark.hadoop.fs.s3a.path.style.access", "true")
-        .config("spark.hadoop.fs.s3a.impl",              "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .getOrCreate()
     )
 
@@ -55,7 +55,9 @@ def get_watermark(spark, jdbc_url, props, source):
         logger.info("Watermark %s : %s", source, wm)
         return wm
     except Exception:
-        logger.warning("Watermark %s inaccessible — chargement intégral", source, exc_info=True)
+        logger.warning(
+            "Watermark %s inaccessible — chargement intégral", source, exc_info=True
+        )
         return None
 
 
@@ -87,10 +89,11 @@ def main():
             logger.warning("Aucune donnée à charger, arrêt.")
             return
 
-        combined = reduce(lambda a, b: a.unionByName(b, allowMissingColumns=True), frames)
+        combined = reduce(
+            lambda a, b: a.unionByName(b, allowMissingColumns=True), frames
+        )
         combined = (
-            combined
-            .drop("year", "month", "day")
+            combined.drop("year", "month", "day")
             .withColumn("tags", F.array_join(F.col("tags"), ","))
             .dropDuplicates(["source", "event_id"])
         )

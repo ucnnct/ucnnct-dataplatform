@@ -13,27 +13,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger("collector.bluesky")
 
-KAFKA_BOOTSTRAP   = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
-TOPIC             = "uconnect.datalake.raw.bluesky"
-JETSTREAM_URL     = os.getenv(
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+TOPIC = "uconnect.datalake.raw.bluesky"
+JETSTREAM_URL = os.getenv(
     "JETSTREAM_URL",
     "wss://jetstream2.us-east.bsky.network/subscribe"
     "?wantedCollections=app.bsky.feed.post"
     "&wantedCollections=app.bsky.feed.like"
     "&wantedCollections=app.bsky.graph.follow",
 )
-RECONNECT_DELAY   = int(os.getenv("RECONNECT_DELAY", "5"))
-BLUESKY_HANDLE    = os.getenv("BLUESKY_HANDLE", "")
-BLUESKY_PASSWORD  = os.getenv("BLUESKY_PASSWORD", "")
-BSKY_API          = "https://bsky.social/xrpc"
+RECONNECT_DELAY = int(os.getenv("RECONNECT_DELAY", "5"))
+BLUESKY_HANDLE = os.getenv("BLUESKY_HANDLE", "")
+BLUESKY_PASSWORD = os.getenv("BLUESKY_PASSWORD", "")
+BSKY_API = "https://bsky.social/xrpc"
 
 producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
 
 
 def delivery_report(err, msg):
     if err:
-        logger.error("Échec de livraison vers Kafka | topic=%s partition=%s erreur=%s",
-                     msg.topic(), msg.partition(), err)
+        logger.error(
+            "Échec de livraison vers Kafka | topic=%s partition=%s erreur=%s",
+            msg.topic(),
+            msg.partition(),
+            err,
+        )
 
 
 def authenticate():
@@ -48,11 +52,16 @@ def authenticate():
         )
         r.raise_for_status()
         session = r.json()
-        logger.info("Authentification Bluesky réussie | handle=%s did=%s",
-                    BLUESKY_HANDLE, session.get("did"))
+        logger.info(
+            "Authentification Bluesky réussie | handle=%s did=%s",
+            BLUESKY_HANDLE,
+            session.get("did"),
+        )
         return session.get("accessJwt")
     except Exception as e:
-        logger.error("Échec authentification Bluesky | handle=%s erreur=%s", BLUESKY_HANDLE, e)
+        logger.error(
+            "Échec authentification Bluesky | handle=%s erreur=%s", BLUESKY_HANDLE, e
+        )
         return None
 
 
@@ -71,15 +80,20 @@ async def collect():
                 ping_interval=20,
                 ping_timeout=30,
             ) as ws:
-                logger.info("Connexion établie avec Bluesky Jetstream | url=%s authentifié=%s",
-                            JETSTREAM_URL, token is not None)
+                logger.info(
+                    "Connexion établie avec Bluesky Jetstream | url=%s authentifié=%s",
+                    JETSTREAM_URL,
+                    token is not None,
+                )
                 count = 0
                 async for message in ws:
                     data = json.loads(message)
                     if data.get("kind") != "commit":
                         continue
                     payload = build_payload(data)
-                    key = payload.get("commit", {}).get("cid") or payload.get("did", "unknown")
+                    key = payload.get("commit", {}).get("cid") or payload.get(
+                        "did", "unknown"
+                    )
                     producer.produce(
                         TOPIC,
                         key=key,
@@ -90,17 +104,30 @@ async def collect():
                     count += 1
                     if count % 100 == 0:
                         producer.flush()
-                        logger.info("Progression | messages_produits=%d topic=%s", count, TOPIC)
+                        logger.info(
+                            "Progression | messages_produits=%d topic=%s", count, TOPIC
+                        )
         except websockets.exceptions.ConnectionClosed as e:
-            logger.warning("Connexion Jetstream fermée | code=%s raison=%s | nouvelle tentative dans %ds",
-                           e.code, e.reason, RECONNECT_DELAY)
+            logger.warning(
+                "Connexion Jetstream fermée | code=%s raison=%s"
+                " | nouvelle tentative dans %ds",
+                e.code,
+                e.reason,
+                RECONNECT_DELAY,
+            )
             await asyncio.sleep(RECONNECT_DELAY)
         except Exception as e:
-            logger.error("Erreur inattendue | type=%s message=%s | nouvelle tentative dans %ds",
-                         type(e).__name__, e, RECONNECT_DELAY)
+            logger.error(
+                "Erreur inattendue | type=%s message=%s | nouvelle tentative dans %ds",
+                type(e).__name__,
+                e,
+                RECONNECT_DELAY,
+            )
             await asyncio.sleep(RECONNECT_DELAY)
 
 
 if __name__ == "__main__":
-    logger.info("Démarrage du collecteur | source=bluesky topic=%s version=1.1.0", TOPIC)
+    logger.info(
+        "Démarrage du collecteur | source=bluesky topic=%s version=1.1.0", TOPIC
+    )
     asyncio.run(collect())

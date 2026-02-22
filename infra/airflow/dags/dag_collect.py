@@ -2,9 +2,11 @@
 DAG collect - Verification disponibilite donnees brutes MinIO.
 
 Les collectors sont des containers always-on qui deposent les fichiers en continu.
-Ce DAG verifie que les fichiers raw du jour existent avant de declencher la transformation.
+Ce DAG verifie que les fichiers raw du jour existent
+avant de declencher la transformation.
 Pipeline : dag_collect -> dag_transform -> dag_kpi
 """
+
 import os
 from datetime import datetime, timedelta
 
@@ -13,16 +15,17 @@ from airflow.exceptions import AirflowException
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT",  "172.31.250.57:9000")
-MINIO_USER     = os.getenv("MINIO_ROOT_USER", "")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
+MINIO_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
-SOURCES        = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
+SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
 
 
 def check_raw_data(source: str, **ctx):
     import boto3
+
     run_date = ctx["ds"].replace("-", "/")
-    prefix   = f"raw/{source}/{run_date}/"
+    prefix = f"raw/{source}/{run_date}/"
     s3 = boto3.client(
         "s3",
         endpoint_url=f"http://{MINIO_ENDPOINT}",

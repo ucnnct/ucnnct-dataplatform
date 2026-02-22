@@ -4,20 +4,21 @@ Usage :
   spark-submit preview.py [source]
   SOURCE=bluesky spark-submit preview.py
 """
+
 import os
 import sys
 
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "test-minio:9000")
-MINIO_USER     = os.getenv("MINIO_ROOT_USER", "minioadmin")
+MINIO_USER = os.getenv("MINIO_ROOT_USER", "minioadmin")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
-SOURCE         = sys.argv[1] if len(sys.argv) > 1 else os.getenv("SOURCE", "bluesky")
-BUCKET         = "datalake"
+SOURCE = sys.argv[1] if len(sys.argv) > 1 else os.getenv("SOURCE", "bluesky")
+BUCKET = "datalake"
 
 spark = (
-    SparkSession.builder
-    .appName(f"preview-{SOURCE}")
+    SparkSession.builder.appName(f"preview-{SOURCE}")
     .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
     .config("spark.hadoop.fs.s3a.access.key", MINIO_USER)
     .config("spark.hadoop.fs.s3a.secret.key", MINIO_PASSWORD)
@@ -47,7 +48,6 @@ print("\nRépartition event_type :")
 df.groupBy("event_type").count().orderBy("count", ascending=False).show()
 
 print("\nNulls par colonne :")
-from pyspark.sql import functions as F
 df.select([F.sum(F.col(c).isNull().cast("int")).alias(c) for c in df.columns]).show()
 
 spark.stop()

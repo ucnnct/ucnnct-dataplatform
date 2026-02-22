@@ -23,8 +23,12 @@ producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
 
 def delivery_report(err, msg):
     if err:
-        logger.error("Échec de livraison vers Kafka | topic=%s partition=%s erreur=%s",
-                     msg.topic(), msg.partition(), err)
+        logger.error(
+            "Échec de livraison vers Kafka | topic=%s partition=%s erreur=%s",
+            msg.topic(),
+            msg.partition(),
+            err,
+        )
 
 
 def fetch_item(item_id):
@@ -46,8 +50,12 @@ def build_payload(item):
 
 def collect():
     seen = set()
-    logger.info("Début de la collecte | api=%s poll_interval=%ds batch_size=%d",
-                HN_API, POLL_INTERVAL, BATCH_SIZE)
+    logger.info(
+        "Début de la collecte | api=%s poll_interval=%ds batch_size=%d",
+        HN_API,
+        POLL_INTERVAL,
+        BATCH_SIZE,
+    )
     while True:
         try:
             story_ids = fetch_new_stories()
@@ -70,17 +78,29 @@ def collect():
                 producer.poll(0)
                 count += 1
             producer.flush()
-            logger.info("Batch traité | nouveaux_items=%d total_vus=%d topic=%s prochaine_collecte=%ds",
-                        count, len(seen), TOPIC, POLL_INTERVAL)
+            logger.info(
+                "Batch traité | nouveaux_items=%d total_vus=%d"
+                " topic=%s prochaine_collecte=%ds",
+                count,
+                len(seen),
+                TOPIC,
+                POLL_INTERVAL,
+            )
         except requests.exceptions.Timeout:
-            logger.warning("Timeout API HackerNews | prochaine tentative dans %ds", POLL_INTERVAL)
+            logger.warning(
+                "Timeout API HackerNews | prochaine tentative dans %ds", POLL_INTERVAL
+            )
         except requests.exceptions.RequestException as e:
-            logger.error("Erreur réseau HackerNews | type=%s message=%s", type(e).__name__, e)
+            logger.error(
+                "Erreur réseau HackerNews | type=%s message=%s", type(e).__name__, e
+            )
         except Exception as e:
             logger.error("Erreur inattendue | type=%s message=%s", type(e).__name__, e)
         time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
-    logger.info("Démarrage du collecteur | source=hackernews topic=%s version=1.1.0", TOPIC)
+    logger.info(
+        "Démarrage du collecteur | source=hackernews topic=%s version=1.1.0", TOPIC
+    )
     collect()

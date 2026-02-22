@@ -6,6 +6,7 @@ Algorithme :
   - Le prochain run ne traite que les fichiers avec clé > last_key.
   - La pagination S3 est gérée automatiquement (pas de limite à 1000 objets).
 """
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -43,10 +44,12 @@ def read_bookmark(s3, bucket, name):
 def write_bookmark(s3, bucket, name, last_key):
     """Sauvegarde le bookmark après un run réussi."""
     key = f"_bookmarks/{name}.json"
-    payload = json.dumps({
-        "last_key":   last_key,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }).encode()
+    payload = json.dumps(
+        {
+            "last_key": last_key,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ).encode()
     s3.put_object(Bucket=bucket, Key=key, Body=payload)
     logger.info("Bookmark '%s' mis à jour : last_key=%s", name, last_key)
 
@@ -54,7 +57,8 @@ def write_bookmark(s3, bucket, name, last_key):
 def list_new_files(s3, bucket, prefix, last_key=None, end_key=None, suffix=".jsonl"):
     """
     Liste les fichiers nouveaux depuis last_key jusqu'à end_key (exclu).
-    Tri alphabétique = tri chronologique (chemins contiennent YYYY/MM/DD/YYYYMMDD_HHMMSS).
+    Tri alphabétique = tri chronologique
+    (chemins contiennent YYYY/MM/DD/YYYYMMDD_HHMMSS).
     Gère automatiquement la pagination (> 1000 objets).
     end_key=None signifie pas de borne supérieure (traitement jusqu'au dernier fichier).
     """
@@ -67,13 +71,18 @@ def list_new_files(s3, bucket, prefix, last_key=None, end_key=None, suffix=".jso
 
     all_keys.sort()
     new_keys = [
-        k for k in all_keys
+        k
+        for k in all_keys
         if (last_key is None or k > last_key)
         and (end_key is None or k <= end_key or k.startswith(end_key))
     ]
 
     logger.info(
         "Prefix '%s' — total: %d, nouveaux: %d (last_key=%s, end_key=%s)",
-        prefix, len(all_keys), len(new_keys), last_key, end_key,
+        prefix,
+        len(all_keys),
+        len(new_keys),
+        last_key,
+        end_key,
     )
     return new_keys
