@@ -29,7 +29,7 @@ def read_bookmark(s3, bucket, name):
     """Lit le bookmark depuis MinIO. Retourne last_key ou None (premier run)."""
     key = f"_bookmarks/{name}.json"
     try:
-        obj  = s3.get_object(Bucket=bucket, Key=key)
+        obj = s3.get_object(Bucket=bucket, Key=key)
         data = json.loads(obj["Body"].read())
         logger.info("Bookmark '%s' : last_key=%s", name, data.get("last_key"))
         return data.get("last_key")
@@ -42,7 +42,7 @@ def read_bookmark(s3, bucket, name):
 
 def write_bookmark(s3, bucket, name, last_key):
     """Sauvegarde le bookmark après un run réussi."""
-    key     = f"_bookmarks/{name}.json"
+    key = f"_bookmarks/{name}.json"
     payload = json.dumps({
         "last_key":   last_key,
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -59,7 +59,7 @@ def list_new_files(s3, bucket, prefix, last_key=None, end_key=None, suffix=".jso
     end_key=None signifie pas de borne supérieure (traitement jusqu'au dernier fichier).
     """
     paginator = s3.get_paginator("list_objects_v2")
-    all_keys  = []
+    all_keys = []
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             if obj["Key"].endswith(suffix):

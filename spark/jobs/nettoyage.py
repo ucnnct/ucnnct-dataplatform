@@ -13,7 +13,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 TEXT_MAX_LEN = 50_000
-MIN_YEAR     = 2020
+MIN_YEAR = 2020
 
 
 def clean_text(col):
@@ -64,7 +64,7 @@ def quality_filter(df: DataFrame) -> DataFrame:
         .filter(
             F.col("event_id").isNotNull() & (F.length(F.col("event_id")) > 0) &
             F.col("actor_id").isNotNull() & (F.length(F.col("actor_id")) > 0) &
-            F.col("text").isNotNull()     & (F.length(F.col("text")) > 0) &
+            F.col("text").isNotNull() & (F.length(F.col("text")) > 0) &
             F.col("event_ts").isNotNull() & (F.year(F.col("event_ts")) >= MIN_YEAR)
         )
         .withColumn("event_ts", F.when(F.col("event_ts") > now, now).otherwise(F.col("event_ts")))
