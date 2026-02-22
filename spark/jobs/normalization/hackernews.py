@@ -25,6 +25,15 @@ from nettoyage import clean_id, clean_html_text, quality_filter
 
 logging.basicConfig(
     level=logging.INFO,
+
+
+
+
+
+
+
+
+    
     format="%(asctime)s [%(levelname)s] %(name)s : %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
@@ -116,7 +125,7 @@ def main():
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
     normalized = normalized.cache()
     count_after = normalized.count()
-    normalized.write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
+    normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy("year", "month", "day").parquet(out_path)
     normalized.unpersist()
     write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
     rejected = count_before - count_after
