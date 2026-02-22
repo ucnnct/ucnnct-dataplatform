@@ -48,24 +48,24 @@ with DAG(
     tags=["uconnect"],
     params={
         "date_debut": Param(
-            "",
-            type="string",
+            None,
+            type=["null", "string"],
             description=(
                 "Borne inférieure event_ts (YYYY-MM-DD HH:MM:SS)."
                 " Vide = watermark automatique."
             ),
         ),
         "date_fin": Param(
-            "",
-            type="string",
+            None,
+            type=["null", "string"],
             description=(
                 "Borne supérieure event_ts (YYYY-MM-DD HH:MM:SS)."
                 " Vide = pas de borne."
             ),
         ),
         "sources": Param(
-            "",
-            type="string",
+            None,
+            type=["null", "string"],
             description=(
                 "Sources à charger séparées par virgule"
                 " (ex: bluesky,nostr). Vide = toutes."
