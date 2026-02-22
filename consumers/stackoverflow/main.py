@@ -76,10 +76,9 @@ def consume():
                         buffer.append(json.loads(msg.value()))
                     except json.JSONDecodeError:
                         logger.warning("Message JSON invalide | key=%s", key)
-                consumer.commit(asynchronous=True)
-
             if len(buffer) >= BATCH_SIZE or (buffer and time.time() - last_flush >= FLUSH_INTERVAL):
                 flush(buffer)
+                consumer.commit(asynchronous=True)
                 buffer = []
                 last_flush = time.time()
 

@@ -81,7 +81,7 @@ def consume():
                         logger.warning("Message JSON invalide | key=%s", key)
             if len(buffer) >= BATCH_SIZE or (buffer and time.time() - last_flush >= FLUSH_INTERVAL):
                 flush(buffer)
-                consumer.commit(asynchronous=False)
+                consumer.commit(asynchronous=True)
                 buffer = []
                 last_flush = time.time()
 
