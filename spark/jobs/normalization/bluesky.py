@@ -27,7 +27,7 @@ from pyspark.sql.types import (
 )
 
 from bookmark import get_s3_client, list_new_files, read_bookmark, write_bookmark
-from nettoyage import clean_id, clean_tags, clean_text, quality_filter
+from nettoyage import clean_id, clean_tags, clean_text
 
 
 BLUESKY_SCHEMA = StructType([
@@ -133,7 +133,20 @@ def main():
         .withColumn("tags",      clean_tags(F.col("tags")))
         .withColumn("text",      clean_text(F.col("text")))
     )
-    normalized = quality_filter(normalized)
+    # Pour les posts : text requis. Pour likes/follows : text peut être null.
+    is_post = F.col("event_type") == "app.bsky.feed.post"
+    now = F.current_timestamp()
+    normalized = (
+        normalized
+        .filter(
+            F.col("event_id").isNotNull() & (F.length(F.col("event_id")) > 0) &
+            F.col("actor_id").isNotNull() & (F.length(F.col("actor_id")) > 0) &
+            F.col("event_ts").isNotNull() & (F.year(F.col("event_ts")) >= 2020) &
+            (~is_post | (F.col("text").isNotNull() & (F.length(F.col("text")) > 0)))
+        )
+        .withColumn("event_ts", F.when(F.col("event_ts") > now, now).otherwise(F.col("event_ts")))
+        .dropDuplicates(["source", "event_id"])
+    )
     normalized = (
         normalized
         .withColumn("year",  F.year("event_ts"))
