@@ -4,12 +4,18 @@ DAG kpi - Chargement curated -> staging.events PostgreSQL.
 Declenche par dag_transform.
   load_postgres  -> charge staging.events depuis curated Parquet (SparkSubmitOperator)
 Pipeline : dag_collect -> dag_transform -> dag_kpi
+
+Params optionnels (run manuel uniquement) :
+  date_debut : borne inférieure event_ts (YYYY-MM-DD HH:MM:SS). Vide = watermark auto.
+  date_fin   : borne supérieure event_ts (YYYY-MM-DD HH:MM:SS). Vide = pas de borne.
+  sources    : sources à charger séparées par virgule. Vide = toutes.
 """
 
 import os
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
@@ -40,6 +46,32 @@ with DAG(
     catchup=False,
     default_args=default_args,
     tags=["uconnect"],
+    params={
+        "date_debut": Param(
+            "",
+            type="string",
+            description=(
+                "Borne inférieure event_ts (YYYY-MM-DD HH:MM:SS)."
+                " Vide = watermark automatique."
+            ),
+        ),
+        "date_fin": Param(
+            "",
+            type="string",
+            description=(
+                "Borne supérieure event_ts (YYYY-MM-DD HH:MM:SS)."
+                " Vide = pas de borne."
+            ),
+        ),
+        "sources": Param(
+            "",
+            type="string",
+            description=(
+                "Sources à charger séparées par virgule"
+                " (ex: bluesky,nostr). Vide = toutes."
+            ),
+        ),
+    },
 ) as dag:
 
     SparkSubmitOperator(
@@ -57,5 +89,8 @@ with DAG(
             "POSTGRES_DB": PG_DB,
             "POSTGRES_USER": PG_USER,
             "POSTGRES_PASSWORD": PG_PASSWORD,
+            "LOAD_DATE_DEBUT": "{{ params.date_debut }}",
+            "LOAD_DATE_FIN": "{{ params.date_fin }}",
+            "LOAD_SOURCES": "{{ params.sources }}",
         },
     )

@@ -29,7 +29,16 @@ PG_DB = os.getenv("POSTGRES_DB", "uconnect")
 PG_USER = os.getenv("POSTGRES_USER", "")
 PG_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 BUCKET = "datalake"
-SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
+ALL_SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]
+
+_sources_env = os.getenv("LOAD_SOURCES", "").strip()
+SOURCES = (
+    [s.strip() for s in _sources_env.split(",") if s.strip()]
+    if _sources_env
+    else ALL_SOURCES
+)
+DATE_DEBUT = os.getenv("LOAD_DATE_DEBUT", "").strip() or None
+DATE_FIN = os.getenv("LOAD_DATE_FIN", "").strip() or None
 
 
 def build_spark():
@@ -76,14 +85,25 @@ def main():
     }
 
     try:
+        logger.info(
+            "Sources : %s | date_debut : %s | date_fin : %s",
+            SOURCES,
+            DATE_DEBUT or "watermark auto",
+            DATE_FIN or "aucune",
+        )
         frames = []
         for source in SOURCES:
             path = f"s3a://{BUCKET}/curated/{source}"
-            wm = get_watermark(spark, jdbc_url, jdbc_props, source)
             try:
                 df = spark.read.parquet(path)
-                if wm is not None:
-                    df = df.filter(F.col("event_ts") > F.lit(wm))
+                if DATE_DEBUT:
+                    df = df.filter(F.col("event_ts") >= F.lit(DATE_DEBUT))
+                else:
+                    wm = get_watermark(spark, jdbc_url, jdbc_props, source)
+                    if wm is not None:
+                        df = df.filter(F.col("event_ts") > F.lit(wm))
+                if DATE_FIN:
+                    df = df.filter(F.col("event_ts") <= F.lit(DATE_FIN))
                 frames.append(df)
             except Exception:
                 logger.warning("Pas de données %s", source, exc_info=True)
