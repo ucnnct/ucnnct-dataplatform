@@ -69,7 +69,7 @@ def list_new_files(s3, bucket, prefix, last_key=None, end_key=None, suffix=".jso
     new_keys = [
         k for k in all_keys
         if (last_key is None or k > last_key)
-        and (end_key is None or k < end_key)
+        and (end_key is None or k <= end_key or k.startswith(end_key))
     ]
 
     logger.info(
