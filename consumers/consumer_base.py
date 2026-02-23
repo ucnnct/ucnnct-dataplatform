@@ -43,7 +43,7 @@ def run(source: str, topic: str, group: str) -> None:
             "max.poll.interval.ms": "600000",
             "heartbeat.interval.ms": "10000",
             "fetch.min.bytes": "1048576",
-            "fetch.max.wait.ms": "500",
+            "fetch.wait.max.ms": "500",
             "max.partition.fetch.bytes": "10485760",
         }
     )
