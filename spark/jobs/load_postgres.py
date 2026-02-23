@@ -126,8 +126,6 @@ def main():
             .dropDuplicates(["source", "event_id"])
             .repartition(20)
         )
-        combined.cache()
-
         # Anti-join contre les clés déjà en base pour éviter les doublons
         try:
             existing = spark.read.jdbc(
