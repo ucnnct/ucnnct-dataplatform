@@ -47,40 +47,87 @@ if DATE_FIN and DATE_FIN.lower() == "none":
 
 
 def build_spark():
+    """Construit la session Spark avec les configs S3/MinIO."""
     return (
         SparkSession.builder.appName("load-postgres")
         .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
         .config("spark.hadoop.fs.s3a.access.key", MINIO_USER)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_PASSWORD)
         .config("spark.hadoop.fs.s3a.path.style.access", "true")
-        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        .config(
+            "spark.hadoop.fs.s3a.impl",
+            "org.apache.hadoop.fs.s3a.S3AFileSystem",
+        )
         .getOrCreate()
     )
 
 
 def get_watermark(spark, jdbc_url, props, source):
-    """Retourne le MAX(event_ts) pour une source, ou None si la table est vide."""
+    """Retourne le MAX(event_ts) pour une source."""
     query = (
-        f"(SELECT COALESCE(MAX(event_ts), TIMESTAMP '1970-01-01 00:00:00') AS wm "
-        f"FROM staging.events WHERE source = '{source}') AS t"
+        f"(SELECT COALESCE(MAX(event_ts), TIMESTAMP '1970-01-01 00:00:00') "
+        f"AS wm FROM staging.events WHERE source = '{source}') AS t"
     )
     try:
-        wm = spark.read.jdbc(jdbc_url, query, properties=props).collect()[0]["wm"]
+        wm = spark.read.jdbc(jdbc_url, query, properties=props).collect()[0][
+            "wm"
+        ]
         logger.info("Watermark %s : %s", source, wm)
         return wm
     except Exception:
         logger.warning(
-            "Watermark %s inaccessible — chargement intégral", source, exc_info=True
+            "Watermark %s inaccessible — chargement intégral",
+            source,
+            exc_info=True,
         )
         return None
 
 
+def execute_sql_returning_int(spark, jdbc_url, props, sql):
+    """Exécute une requête SQL brute et retourne un entier."""
+    user = props.get("user")
+    pwd = props.get("password")
+    driver = props.get("driver", "org.postgresql.Driver")
+    jvm = spark._jvm
+    jvm.java.lang.Class.forName(driver)
+    conn = jvm.java.sql.DriverManager.getConnection(jdbc_url, user, pwd)
+    try:
+        stmt = conn.createStatement()
+        rs = stmt.executeQuery(sql)
+        result = 0
+        if rs.next():
+            result = rs.getInt(1)
+        rs.close()
+        stmt.close()
+        return result
+    finally:
+        conn.close()
+
+
+def execute_sql(spark, jdbc_url, props, sql):
+    """Exécute une commande SQL brute sans retour."""
+    user = props.get("user")
+    pwd = props.get("password")
+    driver = props.get("driver", "org.postgresql.Driver")
+    jvm = spark._jvm
+    jvm.java.lang.Class.forName(driver)
+    conn = jvm.java.sql.DriverManager.getConnection(jdbc_url, user, pwd)
+    try:
+        stmt = conn.createStatement()
+        stmt.execute(sql)
+        stmt.close()
+    finally:
+        conn.close()
+
+
 def main():
+    """Job principal de chargement vers PostgreSQL."""
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
     jdbc_url = (
-        f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}" f"?reWriteBatchedInserts=true"
+        f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}"
+        "?reWriteBatchedInserts=true"
     )
     jdbc_props = {
         "user": PG_USER,
@@ -126,40 +173,69 @@ def main():
             .dropDuplicates(["source", "event_id"])
             .repartition(20)
         )
-        # Anti-join contre les clés déjà en base pour éviter les doublons
-        try:
-            existing = spark.read.jdbc(
-                jdbc_url,
-                "(SELECT source, event_id FROM staging.events) AS t",
-                properties=jdbc_props,
-            )
-            before = combined.count()
-            combined = combined.join(
-                existing, on=["source", "event_id"], how="left_anti"
-            )
-            after = combined.count()
-            logger.info(
-                "Anti-join : %d lignes filtrées (déjà en base), %d à insérer",
-                before - after,
-                after,
-            )
-        except Exception:
-            logger.warning(
-                "Anti-join impossible — poursuite sans filtre", exc_info=True
-            )
 
-        combined.write.option("batchsize", "10000").option("numPartitions", "8").jdbc(
+        target_table = "staging.events"
+        load_table = "staging.events_load"
+
+        logger.info("Préparation de la table de staging %s...", load_table)
+        create_sql = (
+            f"CREATE TABLE IF NOT EXISTS {load_table} "
+            f"(LIKE {target_table} INCLUDING DEFAULTS EXCLUDING INDEXES)"
+        )
+        execute_sql(spark, jdbc_url, jdbc_props, create_sql)
+        execute_sql(
+            spark, jdbc_url, jdbc_props, f"TRUNCATE TABLE {load_table}"
+        )
+
+        logger.info("Écriture du batch dans la table de staging...")
+        combined.write.option("batchsize", "20000").option(
+            "numPartitions", "8"
+        ).jdbc(
             url=jdbc_url,
-            table="staging.events",
+            table=load_table,
             mode="append",
             properties=jdbc_props,
         )
-        total = spark.read.jdbc(
-            jdbc_url,
-            "(SELECT COUNT(*) AS cnt FROM staging.events) AS t",
-            properties=jdbc_props,
+
+        batch_q = f"(SELECT COUNT(*) AS cnt FROM {load_table}) AS t"
+        batch_count = spark.read.jdbc(
+            jdbc_url, batch_q, properties=jdbc_props
         ).collect()[0]["cnt"]
-        logger.info("OK | chargement terminé | total en base : %d", total)
+
+        logger.info(
+            "Fusion finale (INSERT ... ON CONFLICT DO NOTHING)..."
+        )
+        upsert_query = f"""
+            WITH inserted AS (
+                INSERT INTO {target_table}
+                SELECT * FROM {load_table}
+                ON CONFLICT (source, event_id) DO NOTHING
+                RETURNING 1
+            )
+            SELECT COUNT(*) FROM inserted
+        """
+        inserted_count = execute_sql_returning_int(
+            spark, jdbc_url, jdbc_props, upsert_query
+        )
+        duplicate_count = batch_count - inserted_count
+
+        logger.info(
+            "Fusion terminée : %d lignes insérées | %d doublons ignorés",
+            inserted_count,
+            duplicate_count,
+        )
+
+        execute_sql(
+            spark, jdbc_url, jdbc_props, f"TRUNCATE TABLE {load_table}"
+        )
+
+        total_q = f"(SELECT COUNT(*) AS cnt FROM {target_table}) AS t"
+        total = spark.read.jdbc(
+            jdbc_url, total_q, properties=jdbc_props
+        ).collect()[0]["cnt"]
+        logger.info(
+            "OK | Chargement terminé | Total final en base : %d", total
+        )
     finally:
         spark.stop()
 
