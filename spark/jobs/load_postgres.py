@@ -58,6 +58,9 @@ def build_spark():
             "spark.hadoop.fs.s3a.impl",
             "org.apache.hadoop.fs.s3a.S3AFileSystem",
         )
+        .config(
+            "spark.driver.extraClassPath", "/opt/spark/jars/postgresql-42.7.3.jar"
+        )
         .getOrCreate()
     )
 
@@ -87,9 +90,7 @@ def execute_sql_returning_int(spark, jdbc_url, props, sql):
     """Exécute une requête SQL brute et retourne un entier."""
     user = props.get("user")
     pwd = props.get("password")
-    driver = props.get("driver", "org.postgresql.Driver")
     jvm = spark._jvm
-    jvm.java.lang.Class.forName(driver)
     conn = jvm.java.sql.DriverManager.getConnection(jdbc_url, user, pwd)
     try:
         stmt = conn.createStatement()
@@ -108,9 +109,7 @@ def execute_sql(spark, jdbc_url, props, sql):
     """Exécute une commande SQL brute sans retour."""
     user = props.get("user")
     pwd = props.get("password")
-    driver = props.get("driver", "org.postgresql.Driver")
     jvm = spark._jvm
-    jvm.java.lang.Class.forName(driver)
     conn = jvm.java.sql.DriverManager.getConnection(jdbc_url, user, pwd)
     try:
         stmt = conn.createStatement()
