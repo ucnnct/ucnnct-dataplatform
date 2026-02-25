@@ -1,10 +1,9 @@
 """
 DAG collect - Verification disponibilite donnees brutes MinIO.
-
-Les collectors sont des containers always-on qui deposent les fichiers en continu.
-Ce DAG verifie que les fichiers raw du jour existent
-avant de declencher la transformation.
-Pipeline : dag_collect -> dag_transform -> dag_kpi
+Déclenché par horaire (ex: toutes les heures).
+Vérifie que les données brutes du jour sont présentes dans MinIO.
+Si oui, déclenche dag_transform.
+Pipeline : dag_collect -> dag_transform --> chargement en Staging -> dag_kpi
 """
 
 import os

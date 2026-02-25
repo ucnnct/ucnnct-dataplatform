@@ -32,6 +32,7 @@ default_args = {
 
 with DAG(
     dag_id="normalisation",
+    dag_display_name="Détournement et Netoyage",
     schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
@@ -52,6 +53,7 @@ with DAG(
     normalize_tasks = [
         SparkSubmitOperator(
             task_id=f"normalize_{source}",
+            task_display_name=f"Normalise {source.capitalize()}",
             application=f"/opt/spark/jobs/normalization/{source}.py",
             conn_id="spark_default",
             jars=JARS,
@@ -68,8 +70,9 @@ with DAG(
     ]
 
     trigger_kpi = TriggerDagRunOperator(
-        task_id="trigger_kpi",
-        trigger_dag_id="chargement-staging",
+        task_id="trigger_chargement_staging",
+        task_display_name="Déclencher Chargement Staging",
+        trigger_dag_id="chargement_staging",
         execution_date="{{ ds }}",
         reset_dag_run=True,
         wait_for_completion=False,
