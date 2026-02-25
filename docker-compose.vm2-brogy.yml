@@ -77,9 +77,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     volumes:
       - ./infra/airflow/dags:/opt/airflow/dags
       - ./spark/jobs:/opt/spark/jobs
+      - ./jobs:/opt/airflow/jobs
       - ./spark/jars:/opt/spark/jars
       - airflow-logs:/opt/airflow/logs
     command: standalone

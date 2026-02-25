@@ -1,5 +1,5 @@
 # VM3 — saul — 172.31.253.25 — Storage & Viz
-# MinIO : zunesha — 172.31.250.57 — 175GB (externe, non géré ici)
+# MinIO : zunesha — 172.31.250.57 — 175GB 
 version: '3.8'
 
 services:
@@ -24,6 +24,27 @@ services:
       timeout: 5s
       retries: 5
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: uconnect-clickhouse
+    ports:
+      - "0.0.0.0:8123:8123"
+      - "0.0.0.0:9000:9000"
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user=${CLICKHOUSE_USER} --password=${CLICKHOUSE_PASSWORD} --query='SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   superset:
     image: apache/superset:latest-dev
     container_name: uconnect-superset
@@ -34,7 +55,7 @@ services:
       - "8088:8088"
     environment:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/superset_db
     volumes:
       - superset-data:/app/superset_home
       - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py
@@ -49,3 +70,4 @@ networks:
 volumes:
   postgres-data:
   superset-data:
+  clickhouse-data:
