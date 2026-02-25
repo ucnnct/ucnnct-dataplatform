@@ -44,6 +44,7 @@ default_args = {
 
 with DAG(
     dag_id="verification-sources",
+    dag_display_name="Vérification des Sources",
     schedule_interval="@hourly",
     start_date=datetime(2025, 1, 1),
     catchup=False,
@@ -54,6 +55,7 @@ with DAG(
     checks = [
         PythonOperator(
             task_id=f"check_{source}",
+            task_display_name=f"Vérifier {source.capitalize()}",
             python_callable=check_raw_data,
             op_kwargs={"source": source},
         )
@@ -62,6 +64,7 @@ with DAG(
 
     trigger = TriggerDagRunOperator(
         task_id="trigger_transform",
+        task_display_name="Déclencher Normalisation",
         trigger_dag_id="normalisation",
         execution_date="{{ ds }}",
         reset_dag_run=True,

@@ -323,6 +323,7 @@ jobs:
       - name: Pull et redémarrage
         run: |
           docker compose -f docker-compose.vm2-brogy.yml pull
+          docker compose -f docker-compose.vm2-brogy.yml build airflow
           PROJECT_ROOT=$(pwd) docker compose -f docker-compose.vm2-brogy.yml up -d
 
       - name: Vérification de santé
