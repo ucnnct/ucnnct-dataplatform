@@ -90,6 +90,7 @@ jobs:
             brogy:
               - 'spark/**'
               - 'infra/airflow/**'
+              - 'jobs/**'
               - 'docker-compose.vm2-brogy.yml'
             saul:
               - 'infra/postgres/**'
