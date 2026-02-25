@@ -55,9 +55,7 @@ def delivery_report(err, msg):
 
 def seconds_until_reset():
     now = datetime.utcnow()
-    midnight = (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return (midnight - now).total_seconds()
 
 
@@ -85,8 +83,7 @@ def fetch_items(endpoint, site, fromdate):
     data = r.json()
     if data.get("error_id"):
         raise Exception(
-            f"Erreur API StackExchange {data.get('error_id')}: "
-            f"{data.get('error_message')}"
+            f"Erreur API StackExchange {data.get('error_id')}: " f"{data.get('error_message')}"
         )
     return data.get("items", []), data.get("quota_remaining")
 
@@ -97,8 +94,7 @@ def collect():
     poll_interval = compute_interval(quota_remaining)
 
     logger.info(
-        "Démarrage du collecteur | source=stackoverflow"
-        " topic=%s sites=%d quota_journalier=%d",
+        "Démarrage du collecteur | source=stackoverflow" " topic=%s sites=%d quota_journalier=%d",
         TOPIC,
         len(SITES),
         DAILY_QUOTA,
@@ -121,11 +117,10 @@ def collect():
             time.sleep(wait + 10)
             quota_remaining = DAILY_QUOTA
             poll_interval = compute_interval(quota_remaining)
-            logger.info(
-                "Quota réinitialisé | nouvel_intervalle=%ds", int(poll_interval)
-            )
+            logger.info("Quota réinitialisé | nouvel_intervalle=%ds", int(poll_interval))
             continue
 
+        t_batch = time.time()
         total = 0
         for site in SITES:
             try:
@@ -180,16 +175,15 @@ def collect():
         poll_interval = compute_interval(quota_remaining)
 
         if poll_interval is None:
-            logger.warning(
-                "Quota critique | quota_restant=%d arrêt préventif", quota_remaining
-            )
+            logger.warning("Quota critique | quota_restant=%d arrêt préventif", quota_remaining)
             continue
 
         logger.info(
-            "Batch terminé | items=%d quota_restant=%d"
+            "Batch terminé | items=%d quota_restant=%d durée=%.1fs"
             " intervalle_adaptatif=%ds reset_dans=%.1fh",
             total,
             quota_remaining,
+            time.time() - t_batch,
             int(poll_interval),
             seconds_until_reset() / 3600,
         )
@@ -198,7 +192,5 @@ def collect():
 
 
 if __name__ == "__main__":
-    logger.info(
-        "Démarrage du collecteur | source=stackoverflow topic=%s version=1.1.0", TOPIC
-    )
+    logger.info("Démarrage du collecteur | source=stackoverflow topic=%s version=1.1.0", TOPIC)
     collect()

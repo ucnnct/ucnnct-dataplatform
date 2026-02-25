@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import logging
+import time
 import websockets
 from confluent_kafka import Producer
 
@@ -63,6 +64,7 @@ async def collect_relay(relay_url):
                 await ws.send(SUBSCRIPTION)
                 logger.info("Abonnement actif | relay=%s kinds=[1,3,6,7]", relay_url)
                 count = 0
+                t_period = time.time()
                 async for message in ws:
                     data = json.loads(message)
                     if not data or data[0] != "EVENT":
@@ -79,10 +81,14 @@ async def collect_relay(relay_url):
                     count += 1
                     if count % 50 == 0:
                         producer.flush()
+                        elapsed = time.time() - t_period
+                        rate = int(50 / elapsed) if elapsed > 0 else 0
+                        t_period = time.time()
                         logger.info(
-                            "Progression | relay=%s events_produits=%d topic=%s",
+                            "Progression | relay=%s events_produits=%d débit=%d evt/s topic=%s",
                             relay_url,
                             count,
+                            rate,
                             TOPIC,
                         )
         except websockets.exceptions.ConnectionClosed as e:
@@ -95,8 +101,7 @@ async def collect_relay(relay_url):
             await asyncio.sleep(RECONNECT_DELAY)
         except Exception as e:
             logger.error(
-                "Erreur relay | relay=%s type=%s message=%s"
-                " | nouvelle tentative dans %ds",
+                "Erreur relay | relay=%s type=%s message=%s" " | nouvelle tentative dans %ds",
                 relay_url,
                 type(e).__name__,
                 e,
@@ -106,12 +111,8 @@ async def collect_relay(relay_url):
 
 
 async def collect():
-    logger.info(
-        "Connexion aux relays | total=%d relays=%s", len(NOSTR_RELAYS), NOSTR_RELAYS
-    )
-    tasks = [
-        asyncio.create_task(collect_relay(relay.strip())) for relay in NOSTR_RELAYS
-    ]
+    logger.info("Connexion aux relays | total=%d relays=%s", len(NOSTR_RELAYS), NOSTR_RELAYS)
+    tasks = [asyncio.create_task(collect_relay(relay.strip())) for relay in NOSTR_RELAYS]
     await asyncio.gather(*tasks)
 
 

@@ -75,8 +75,9 @@ with DAG(
             "LOAD_DATE_DEBUT": "{{ params.date_debut or '' }}",
             "LOAD_DATE_FIN": "{{ params.date_fin or '' }}",
             "LOAD_SOURCES": "{{ params.sources or '' }}",
-            "LOG_FORMAT": "json",
+            "LOG_FORMAT": "console",
             "LOG_LEVEL": "INFO",
+            "PYTHONPATH": "/opt/airflow/jobs",
         },
     )
 

@@ -74,14 +74,19 @@ jobs:
               - 'collectors/stackoverflow/**'
             con_bluesky:
               - 'consumers/bluesky/**'
+              - 'consumers/consumer_base.py'
             con_nostr:
               - 'consumers/nostr/**'
+              - 'consumers/consumer_base.py'
             con_hackernews:
               - 'consumers/hackernews/**'
+              - 'consumers/consumer_base.py'
             con_rss:
               - 'consumers/rss/**'
+              - 'consumers/consumer_base.py'
             con_stackoverflow:
               - 'consumers/stackoverflow/**'
+              - 'consumers/consumer_base.py'
             loki:
               - 'collectors/**'
               - 'consumers/**'

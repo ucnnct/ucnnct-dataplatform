@@ -88,6 +88,7 @@ def collect():
         POLL_INTERVAL,
     )
     while True:
+        t_cycle = time.time()
         cycle_total = 0
         for feed_url in RSS_FEEDS:
             try:
@@ -120,9 +121,7 @@ def collect():
 
                 producer.flush()
                 if count > 0:
-                    logger.info(
-                        "Feed traité | feed=%s nouveaux_items=%d", feed_title, count
-                    )
+                    logger.info("Feed traité | feed=%s nouveaux_items=%d", feed_title, count)
                 else:
                     logger.debug("Aucun nouvel item | feed=%s", feed_title)
                 cycle_total += count
@@ -136,9 +135,10 @@ def collect():
                 )
 
         logger.info(
-            "Cycle terminé | total_nouveaux=%d total_vus=%d prochaine_collecte=%ds",
+            "Cycle terminé | total_nouveaux=%d total_vus=%d durée=%.1fs prochaine_collecte=%ds",
             cycle_total,
             len(seen),
+            time.time() - t_cycle,
             POLL_INTERVAL,
         )
         time.sleep(POLL_INTERVAL)

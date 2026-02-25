@@ -46,7 +46,6 @@ Variables d'environnement :
     LOG_FORMAT          json | console  (défaut: console)
 """
 
-import logging
 import os
 import sys
 from datetime import date
@@ -54,58 +53,14 @@ from datetime import date
 import boto3
 import clickhouse_connect
 import psycopg2
-import structlog
 from botocore.client import Config
 from psycopg2.extras import execute_values
+from config import CH_DB, CH_HOST, CH_PASSWORD, CH_PORT, CH_USER
+from config import PG_DB, PG_HOST, PG_PASSWORD, PG_PORT, PG_SCHEMA, PG_USER
+from config import MINIO_ACCESS_KEY, MINIO_BUCKET, MINIO_ENDPOINT, MINIO_SECRET_KEY
+from log_setup import setup
 
-# ── Logging ───────────────────────────────────────────────────────────────────
-_log_format = os.getenv("LOG_FORMAT", "console").lower()
-_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-
-logging.basicConfig(level=getattr(logging, _log_level, logging.INFO))
-
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
-        structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        (
-            structlog.processors.JSONRenderer()
-            if _log_format == "json"
-            else structlog.dev.ConsoleRenderer()
-        ),
-    ],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
-log = structlog.get_logger("stats-globales")
-
-# ── ClickHouse ────────────────────────────────────────────────────────────────
-CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
-CH_PORT = int(os.getenv("CLICKHOUSE_PORT", "8123"))
-CH_USER = os.getenv("CLICKHOUSE_USER", "default")
-CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "sirius2025")
-CH_DB = os.getenv("CLICKHOUSE_DB", "uconnect")
-
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
-PG_HOST = os.getenv("POSTGRES_HOST", "localhost")
-PG_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
-PG_DB = os.getenv("POSTGRES_DB", "uconnect")
-PG_USER = os.getenv("POSTGRES_USER", "ucnnct")
-PG_PASSWORD = os.getenv("POSTGRES_PASSWORD", "ucnnct_pg_2024")
-PG_SCHEMA = os.getenv("POSTGRES_SCHEMA", "datamart")
-
-# ── MinIO ─────────────────────────────────────────────────────────────────────
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "ucnnct")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "sirius2025")
-MINIO_BUCKET = os.getenv("MINIO_BUCKET", "datalake")
+log = setup("stats-globales")
 
 # ── Sources ───────────────────────────────────────────────────────────────────
 ALL_SOURCES = ["bluesky", "nostr", "hackernews", "rss", "stackoverflow"]

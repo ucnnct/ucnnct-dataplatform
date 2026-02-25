@@ -18,6 +18,7 @@ Détournement selon docs/Détournement_Expliqué.pdf :
 import logging
 import os
 import sys
+import time
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -63,11 +64,14 @@ def main():
         logger.info("Aucun nouveau fichier pour %s, arrêt.", SOURCE)
         sys.exit(0)
 
+    t0 = time.time()
+    logger.info("démarrage  fichiers=%d  bookmark=%s", len(new_keys), last_key or "début")
+
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
     s3a_paths = [f"s3a://{BUCKET}/{k}" for k in new_keys]
-    logger.info("Lecture de %d fichiers", len(s3a_paths))
+    t_read = time.time()
 
     try:
         df = spark.read.json(s3a_paths)
@@ -82,17 +86,15 @@ def main():
         spark.stop()
         sys.exit(0)
 
+    logger.info("lecture     lignes=%s  durée=%.1fs", f"{count_before:,}", time.time() - t_read)
+
     is_question = F.col("post_type") == "question"
 
     event_id = (
-        F.when(is_question, F.col("question_id"))
-        .otherwise(F.col("answer_id"))
-        .cast("string")
+        F.when(is_question, F.col("question_id")).otherwise(F.col("answer_id")).cast("string")
     )
     thread_id = F.col("question_id").cast("string")
-    parent_id = F.when(~is_question, F.col("question_id").cast("string")).otherwise(
-        F.lit(None)
-    )
+    parent_id = F.when(~is_question, F.col("question_id").cast("string")).otherwise(F.lit(None))
 
     is_resolved = F.when(
         is_question,
@@ -129,24 +131,28 @@ def main():
 
     out_path = f"s3a://{BUCKET}/curated/{SOURCE}"
     normalized = normalized.cache()
+    t_norm = time.time()
     count_after = normalized.count()
+    rejected = count_before - count_after
+    pct = (rejected / count_before * 100) if count_before > 0 else 0
+    logger.info(
+        "normalisation  conservés=%s  rejetés=%s (%.1f%%)  durée=%.1fs",
+        f"{count_after:,}",
+        f"{rejected:,}",
+        pct,
+        time.time() - t_norm,
+    )
+    t_write = time.time()
     normalized = normalized.dropDuplicates(["source", "event_id"])
     normalized.repartition(1, "year", "month", "day").write.mode("append").partitionBy(
         "year", "month", "day"
     ).parquet(out_path)
     normalized.unpersist()
     write_bookmark(s3, BUCKET, SOURCE, new_keys[-1])
-    rejected = count_before - count_after
-    pct = (rejected / count_before * 100) if count_before > 0 else 0
-    logger.info(
-        "OK | fichiers=%d reçus=%d traités=%d rejetés=%d (%.1f%%) sortie=%s",
-        len(new_keys),
-        count_before,
-        count_after,
-        rejected,
-        pct,
-        out_path,
-    )
+    t_end = time.time()
+    debit = int(count_after / (t_end - t_write)) if (t_end - t_write) > 0 else 0
+    logger.info("écriture    durée=%.1fs  débit=%s lig/s", t_end - t_write, f"{debit:,}")
+    logger.info("terminé     total=%.1fs", t_end - t0)
     spark.stop()
 
 

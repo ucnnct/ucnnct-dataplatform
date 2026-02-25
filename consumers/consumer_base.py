@@ -52,13 +52,17 @@ def run(source: str, topic: str, group: str) -> None:
         MINIO_ENDPOINT, access_key=MINIO_USER, secret_key=MINIO_PASSWORD, secure=False
     )
 
+    total_flushed = 0
+
     def flush(buffer):
+        nonlocal total_flushed
         now = datetime.now(timezone.utc)
         path = (
             f"raw/{source}/{now.strftime('%Y/%m/%d')}/"
             f"{now.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.jsonl"
         )
         content = "\n".join(json.dumps(r) for r in buffer).encode("utf-8")
+        t_flush = time.time()
         try:
             minio_client.put_object(
                 BUCKET,
@@ -67,7 +71,16 @@ def run(source: str, topic: str, group: str) -> None:
                 length=len(content),
                 content_type="application/x-ndjson",
             )
-            logger.info("Flush MinIO | path=%s records=%d", path, len(buffer))
+            duration = time.time() - t_flush
+            rate = int(len(buffer) / duration) if duration > 0 else 0
+            total_flushed += len(buffer)
+            logger.info(
+                "Flush MinIO | path=%s records=%d débit=%d rec/s total=%d",
+                path,
+                len(buffer),
+                rate,
+                total_flushed,
+            )
         except Exception as exc:
             logger.error("Échec flush MinIO | path=%s erreur=%s", path, exc)
             raise

@@ -45,8 +45,9 @@ KPI_ENV = {
     "MINIO_ACCESS_KEY": MINIO_USER,
     "MINIO_SECRET_KEY": MINIO_PASSWORD,
     "MINIO_BUCKET": "datalake",
-    "LOG_FORMAT": "json",
+    "LOG_FORMAT": "console",
     "LOG_LEVEL": "INFO",
+    "PYTHONPATH": "/opt/airflow/jobs",
 }
 
 default_args = {

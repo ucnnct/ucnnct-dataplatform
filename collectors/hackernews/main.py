@@ -58,6 +58,7 @@ def collect():
     )
     while True:
         try:
+            t_batch = time.time()
             story_ids = fetch_new_stories()
             count = 0
             for sid in story_ids:
@@ -80,27 +81,22 @@ def collect():
             producer.flush()
             logger.info(
                 "Batch traité | nouveaux_items=%d total_vus=%d"
-                " topic=%s prochaine_collecte=%ds",
+                " durée=%.1fs topic=%s prochaine_collecte=%ds",
                 count,
                 len(seen),
+                time.time() - t_batch,
                 TOPIC,
                 POLL_INTERVAL,
             )
         except requests.exceptions.Timeout:
-            logger.warning(
-                "Timeout API HackerNews | prochaine tentative dans %ds", POLL_INTERVAL
-            )
+            logger.warning("Timeout API HackerNews | prochaine tentative dans %ds", POLL_INTERVAL)
         except requests.exceptions.RequestException as e:
-            logger.error(
-                "Erreur réseau HackerNews | type=%s message=%s", type(e).__name__, e
-            )
+            logger.error("Erreur réseau HackerNews | type=%s message=%s", type(e).__name__, e)
         except Exception as e:
             logger.error("Erreur inattendue | type=%s message=%s", type(e).__name__, e)
         time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
-    logger.info(
-        "Démarrage du collecteur | source=hackernews topic=%s version=1.1.0", TOPIC
-    )
+    logger.info("Démarrage du collecteur | source=hackernews topic=%s version=1.1.0", TOPIC)
     collect()

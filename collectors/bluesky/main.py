@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import logging
+import time
 import requests
 import websockets
 from confluent_kafka import Producer
@@ -59,9 +60,7 @@ def authenticate():
         )
         return session.get("accessJwt")
     except Exception as e:
-        logger.error(
-            "Échec authentification Bluesky | handle=%s erreur=%s", BLUESKY_HANDLE, e
-        )
+        logger.error("Échec authentification Bluesky | handle=%s erreur=%s", BLUESKY_HANDLE, e)
         return None
 
 
@@ -86,14 +85,13 @@ async def collect():
                     token is not None,
                 )
                 count = 0
+                t_period = time.time()
                 async for message in ws:
                     data = json.loads(message)
                     if data.get("kind") != "commit":
                         continue
                     payload = build_payload(data)
-                    key = payload.get("commit", {}).get("cid") or payload.get(
-                        "did", "unknown"
-                    )
+                    key = payload.get("commit", {}).get("cid") or payload.get("did", "unknown")
                     producer.produce(
                         TOPIC,
                         key=key,
@@ -104,13 +102,18 @@ async def collect():
                     count += 1
                     if count % 100 == 0:
                         producer.flush()
+                        elapsed = time.time() - t_period
+                        rate = int(100 / elapsed) if elapsed > 0 else 0
+                        t_period = time.time()
                         logger.info(
-                            "Progression | messages_produits=%d topic=%s", count, TOPIC
+                            "Progression | messages_produits=%d débit=%d msg/s topic=%s",
+                            count,
+                            rate,
+                            TOPIC,
                         )
         except websockets.exceptions.ConnectionClosed as e:
             logger.warning(
-                "Connexion Jetstream fermée | code=%s raison=%s"
-                " | nouvelle tentative dans %ds",
+                "Connexion Jetstream fermée | code=%s raison=%s" " | nouvelle tentative dans %ds",
                 e.code,
                 e.reason,
                 RECONNECT_DELAY,
@@ -127,7 +130,5 @@ async def collect():
 
 
 if __name__ == "__main__":
-    logger.info(
-        "Démarrage du collecteur | source=bluesky topic=%s version=1.1.0", TOPIC
-    )
+    logger.info("Démarrage du collecteur | source=bluesky topic=%s version=1.1.0", TOPIC)
     asyncio.run(collect())

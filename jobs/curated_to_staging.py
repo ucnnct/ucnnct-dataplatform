@@ -34,50 +34,13 @@ import sys
 import time
 from datetime import datetime
 
-import logging
-
 import clickhouse_connect
-import structlog
+from config import CH_DB, CH_HOST, CH_PASSWORD, CH_PORT, CH_USER
+from config import MINIO_BUCKET as BUCKET
+from config import MINIO_ENDPOINT, MINIO_PASSWORD, MINIO_USER
+from log_setup import setup
 
-_log_format = os.getenv("LOG_FORMAT", "console").lower()
-_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-
-logging.basicConfig(level=getattr(logging, _log_level, logging.INFO))
-
-_shared_processors = [
-    structlog.stdlib.filter_by_level,
-    structlog.stdlib.add_log_level,
-    structlog.stdlib.add_logger_name,
-    structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
-    structlog.processors.StackInfoRenderer(),
-    structlog.processors.format_exc_info,
-]
-
-if _log_format == "json":
-    _renderer = structlog.processors.JSONRenderer()
-else:
-    _renderer = structlog.dev.ConsoleRenderer()
-
-structlog.configure(
-    processors=_shared_processors + [_renderer],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
-log = structlog.get_logger("curated-to-staging")
-
-CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
-CH_PORT = int(os.getenv("CLICKHOUSE_PORT", "8123"))
-CH_USER = os.getenv("CLICKHOUSE_USER", "default")
-CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "sirius2025")
-CH_DB = os.getenv("CLICKHOUSE_DB", "uconnect")
-
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
-MINIO_USER = os.getenv("MINIO_ROOT_USER", "ucnnct")
-MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "sirius2025")
-BUCKET = os.getenv("MINIO_BUCKET", "datalake")
+log = setup("curated-to-staging")
 
 SOURCES_ENV = os.getenv("LOAD_SOURCES", "").strip()
 DATE_DEBUT_ENV = os.getenv("LOAD_DATE_DEBUT", "").strip()
