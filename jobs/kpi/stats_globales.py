@@ -320,7 +320,7 @@ def main() -> None:
                      curated_size_bytes, curated_file_count,
                      staging_size_bytes)
                 VALUES %s
-                ON CONFLICT (period_start, period_end, source) DO UPDATE SET
+                ON CONFLICT (period_end, source) DO UPDATE SET
                     total_events        = EXCLUDED.total_events,
                     total_acteurs       = EXCLUDED.total_acteurs,
                     dau_moyen           = EXCLUDED.dau_moyen,

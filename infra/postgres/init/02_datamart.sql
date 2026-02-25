@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS datamart.kpi1_utilisation (
     taux_fonctionnel    NUMERIC(5,4),
     freq_moyenne        NUMERIC(10,2),
     computed_at         TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (period_start, period_end, source)
+    PRIMARY KEY (period_end, source)
 );
 
 CREATE TABLE IF NOT EXISTS datamart.kpi2_collaboration (
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS datamart.kpi2_collaboration (
     interaction_moyenne       NUMERIC(10,2),
     nb_messages_total         BIGINT,
     computed_at               TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (period_start, period_end, source)
+    PRIMARY KEY (period_end, source)
 );
 
 CREATE TABLE IF NOT EXISTS datamart.stats_globales (
@@ -44,5 +44,5 @@ CREATE TABLE IF NOT EXISTS datamart.stats_globales (
     curated_file_count  BIGINT,
     staging_size_bytes  BIGINT,
     computed_at         TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (period_start, period_end, source)
+    PRIMARY KEY (period_end, source)
 );

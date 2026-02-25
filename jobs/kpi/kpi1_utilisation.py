@@ -173,7 +173,7 @@ def main() -> None:
                     (period_start, period_end, source,
                      taux_actifs, taux_participation, taux_fonctionnel, freq_moyenne)
                 VALUES %s
-                ON CONFLICT (period_start, period_end, source) DO UPDATE SET
+                ON CONFLICT (period_end, source) DO UPDATE SET
                     taux_actifs        = EXCLUDED.taux_actifs,
                     taux_participation = EXCLUDED.taux_participation,
                     taux_fonctionnel   = EXCLUDED.taux_fonctionnel,

@@ -178,7 +178,7 @@ def main() -> None:
                      taux_participation_groupe, taux_resolution,
                      interaction_moyenne, nb_messages_total)
                 VALUES %s
-                ON CONFLICT (period_start, period_end, source) DO UPDATE SET
+                ON CONFLICT (period_end, source) DO UPDATE SET
                     taux_participation_groupe = EXCLUDED.taux_participation_groupe,
                     taux_resolution           = EXCLUDED.taux_resolution,
                     interaction_moyenne       = EXCLUDED.interaction_moyenne,
