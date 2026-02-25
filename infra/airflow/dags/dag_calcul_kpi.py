@@ -3,7 +3,7 @@ DAG calcul_kpi - Calcul des KPIs (ClickHouse -> PostgreSQL datamart).
 
 Déclenché par chargement_staging.
 
-Pipeline : Verifier que nos donnees de raw son toujours present -> 
+Pipeline : Verifier que nos donnees de raw son toujours present ->
 Nettoyage et Detournement  -> chargement en staging -> Calcul des KPIs
 """
 
@@ -13,40 +13,40 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT",     "172.31.250.57:9000")
-MINIO_USER     = os.getenv("MINIO_ROOT_USER",    "")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
+MINIO_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
 
-CH_HOST     = os.getenv("CLICKHOUSE_HOST",     "localhost")
-CH_PORT     = os.getenv("CLICKHOUSE_PORT",     "8123")
-CH_USER     = os.getenv("CLICKHOUSE_USER",     "default")
+CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
+CH_PORT = os.getenv("CLICKHOUSE_PORT", "8123")
+CH_USER = os.getenv("CLICKHOUSE_USER", "default")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
-CH_DB       = os.getenv("CLICKHOUSE_DB",       "uconnect")
+CH_DB = os.getenv("CLICKHOUSE_DB", "uconnect")
 
-PG_HOST     = os.getenv("POSTGRES_HOST",     "172.31.253.25")
-PG_PORT     = os.getenv("POSTGRES_PORT",     "5432")
-PG_DB       = os.getenv("POSTGRES_DB",       "uconnect")
-PG_USER     = os.getenv("POSTGRES_USER",     "")
+PG_HOST = os.getenv("POSTGRES_HOST", "172.31.253.25")
+PG_PORT = os.getenv("POSTGRES_PORT", "5432")
+PG_DB = os.getenv("POSTGRES_DB", "uconnect")
+PG_USER = os.getenv("POSTGRES_USER", "")
 PG_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 
 KPI_ENV = {
-    "CLICKHOUSE_HOST":     CH_HOST,
-    "CLICKHOUSE_PORT":     CH_PORT,
-    "CLICKHOUSE_USER":     CH_USER,
+    "CLICKHOUSE_HOST": CH_HOST,
+    "CLICKHOUSE_PORT": CH_PORT,
+    "CLICKHOUSE_USER": CH_USER,
     "CLICKHOUSE_PASSWORD": CH_PASSWORD,
-    "CLICKHOUSE_DB":       CH_DB,
-    "POSTGRES_HOST":       PG_HOST,
-    "POSTGRES_PORT":       PG_PORT,
-    "POSTGRES_DB":         PG_DB,
-    "POSTGRES_USER":       PG_USER,
-    "POSTGRES_PASSWORD":   PG_PASSWORD,
-    "POSTGRES_SCHEMA":     "datamart",
-    "MINIO_ENDPOINT":      MINIO_ENDPOINT,
-    "MINIO_ACCESS_KEY":    MINIO_USER,
-    "MINIO_SECRET_KEY":    MINIO_PASSWORD,
-    "MINIO_BUCKET":        "datalake",
-    "LOG_FORMAT":          "json",
-    "LOG_LEVEL":           "INFO",
+    "CLICKHOUSE_DB": CH_DB,
+    "POSTGRES_HOST": PG_HOST,
+    "POSTGRES_PORT": PG_PORT,
+    "POSTGRES_DB": PG_DB,
+    "POSTGRES_USER": PG_USER,
+    "POSTGRES_PASSWORD": PG_PASSWORD,
+    "POSTGRES_SCHEMA": "datamart",
+    "MINIO_ENDPOINT": MINIO_ENDPOINT,
+    "MINIO_ACCESS_KEY": MINIO_USER,
+    "MINIO_SECRET_KEY": MINIO_PASSWORD,
+    "MINIO_BUCKET": "datalake",
+    "LOG_FORMAT": "json",
+    "LOG_LEVEL": "INFO",
 }
 
 default_args = {

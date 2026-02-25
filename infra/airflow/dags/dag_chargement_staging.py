@@ -15,15 +15,15 @@ from airflow.models.param import Param
 from airflow.operators.bash import BashOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT",     "172.31.250.57:9000")
-MINIO_USER     = os.getenv("MINIO_ROOT_USER",    "")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "172.31.250.57:9000")
+MINIO_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
 
-CH_HOST     = os.getenv("CLICKHOUSE_HOST",     "localhost")
-CH_PORT     = os.getenv("CLICKHOUSE_PORT",     "8123")
-CH_USER     = os.getenv("CLICKHOUSE_USER",     "default")
+CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
+CH_PORT = os.getenv("CLICKHOUSE_PORT", "8123")
+CH_USER = os.getenv("CLICKHOUSE_USER", "default")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
-CH_DB       = os.getenv("CLICKHOUSE_DB",       "uconnect")
+CH_DB = os.getenv("CLICKHOUSE_DB", "uconnect")
 
 default_args = {
     "owner": "airflow",
@@ -63,20 +63,20 @@ with DAG(
         task_display_name="Curated → ClickHouse",
         bash_command="python3 /opt/airflow/jobs/curated_to_staging.py",
         env={
-            "CLICKHOUSE_HOST":     CH_HOST,
-            "CLICKHOUSE_PORT":     CH_PORT,
-            "CLICKHOUSE_USER":     CH_USER,
+            "CLICKHOUSE_HOST": CH_HOST,
+            "CLICKHOUSE_PORT": CH_PORT,
+            "CLICKHOUSE_USER": CH_USER,
             "CLICKHOUSE_PASSWORD": CH_PASSWORD,
-            "CLICKHOUSE_DB":       CH_DB,
-            "MINIO_ENDPOINT":      MINIO_ENDPOINT,
-            "MINIO_ROOT_USER":     MINIO_USER,
+            "CLICKHOUSE_DB": CH_DB,
+            "MINIO_ENDPOINT": MINIO_ENDPOINT,
+            "MINIO_ROOT_USER": MINIO_USER,
             "MINIO_ROOT_PASSWORD": MINIO_PASSWORD,
-            "MINIO_BUCKET":        "datalake",
-            "LOAD_DATE_DEBUT":     "{{ params.date_debut }}",
-            "LOAD_DATE_FIN":       "{{ params.date_fin }}",
-            "LOAD_SOURCES":        "{{ params.sources }}",
-            "LOG_FORMAT":          "json",
-            "LOG_LEVEL":           "INFO",
+            "MINIO_BUCKET": "datalake",
+            "LOAD_DATE_DEBUT": "{{ params.date_debut }}",
+            "LOAD_DATE_FIN": "{{ params.date_fin }}",
+            "LOAD_SOURCES": "{{ params.sources }}",
+            "LOG_FORMAT": "json",
+            "LOG_LEVEL": "INFO",
         },
     )
 
