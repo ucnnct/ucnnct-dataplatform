@@ -194,7 +194,7 @@ def main() -> None:
         )
 
     except Exception:
-       y log.error(
+        log.error(
             "échec insertion", exc_info=True, sql=import_sql[:300] + "..."
         )  # tronqué pour éviter les logs géants
         sys.exit(1)

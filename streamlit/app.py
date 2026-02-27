@@ -123,7 +123,7 @@ with st.sidebar:
     sources_sel = st.multiselect("Sources", sources_dispo, default=sources_dispo)
 
     st.divider()
-    st.caption(f"Cache rafraichi toutes les 5 min.")
+    st.caption("Cache rafraichi toutes les 5 min.")
 
 if not sources_sel:
     st.warning("Selectionnez au moins une source dans le filtre.")
@@ -593,7 +593,7 @@ with tab_temporal:
             color="source",
             color_discrete_map=COLORS,
             log_y=True,
-            title=f"Evolution consolidee (echelle log)",
+            title="Evolution consolidee (echelle log)",
             markers=True,
             labels={"period_start": "Date", metric_choice: "Valeur (log)"},
         )
