@@ -101,6 +101,7 @@ jobs:
               - 'infra/postgres/**'
               - 'infra/superset/**'
               - 'infra/minio/**'
+              - 'streamlit/**'
               - 'docker-compose.vm3-saul.yml'
 
       - id: set-matrix
@@ -382,13 +383,14 @@ jobs:
         run: |
           docker ps -aq --filter publish=5432 | xargs -r docker rm -f 2>/dev/null || true
           docker compose -f docker-compose.vm3-saul.yml down --remove-orphans 2>/dev/null || true
-          docker compose -f docker-compose.vm3-saul.yml pull
+          docker compose -f docker-compose.vm3-saul.yml pull --ignore-buildable
+          docker compose -f docker-compose.vm3-saul.yml build streamlit
           docker compose -f docker-compose.vm3-saul.yml up -d
 
       - name: Vérification de santé
         run: |
           sleep 15
-          for container in uconnect-postgres uconnect-clickhouse uconnect-superset; do
+          for container in uconnect-postgres uconnect-clickhouse uconnect-superset uconnect-streamlit; do
             status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null || echo "absent")
             [ "$status" = "running" ] && echo "OK $container" || { echo "ERREUR $container — $status"; exit 1; }
           done

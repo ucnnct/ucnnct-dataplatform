@@ -32,9 +32,6 @@ CREATE TABLE IF NOT EXISTS datamart.stats_globales (
     total_acteurs       BIGINT,
     dau_moyen           NUMERIC(10,2),
     avg_events_per_user NUMERIC(10,2),
-    reply_rate          NUMERIC(5,4),
-    thread_rate         NUMERIC(5,4),
-    help_request_rate   NUMERIC(5,4),
     resolution_rate     NUMERIC(5,4),
     first_event_ts      TIMESTAMPTZ,
     last_event_ts       TIMESTAMPTZ,
@@ -42,6 +39,7 @@ CREATE TABLE IF NOT EXISTS datamart.stats_globales (
     raw_file_count      BIGINT,
     curated_size_bytes  BIGINT,
     curated_file_count  BIGINT,
+    staging_rows        BIGINT,
     staging_size_bytes  BIGINT,
     computed_at         TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (period_end, source)

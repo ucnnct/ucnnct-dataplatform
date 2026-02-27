@@ -84,21 +84,21 @@ def fetch_stats(ch, source: str) -> dict | None:
         SELECT
             count()                                                             AS total_events,
             uniq(actor_id)                                                      AS total_acteurs,
-            avg(daily_dau)                                                      AS dau_moyen,
-            countIf(isNotNull(parent_id))                                       AS nb_replies,
-            countIf(isNotNull(thread_id))                                       AS nb_in_thread,
+            (
+                SELECT avg(dau)
+                FROM (
+                    SELECT uniq(actor_id) AS dau
+                    FROM events
+                    WHERE source = '{source}'
+                    GROUP BY toDate(event_ts)
+                )
+            )                                                                   AS dau_moyen,
             countIf(is_help_request = 1)                                        AS nb_help,
             countIf(is_help_request = 1 AND is_resolved = 1)                   AS nb_resolved,
             min(event_ts)                                                       AS first_event_ts,
             max(event_ts)                                                       AS last_event_ts
-        FROM (
-            SELECT
-                actor_id, event_ts, parent_id, thread_id,
-                is_help_request, is_resolved,
-                uniq(actor_id) OVER (PARTITION BY toDate(event_ts))            AS daily_dau
-            FROM events
-            WHERE source = '{source}'
-        )
+        FROM events
+        WHERE source = '{source}'
     """).first_row
 
     if not row or row[0] == 0:
@@ -108,8 +108,6 @@ def fetch_stats(ch, source: str) -> dict | None:
         total_events,
         total_acteurs,
         dau_moyen,
-        nb_replies,
-        nb_in_thread,
         nb_help,
         nb_resolved,
         first_event_ts,
@@ -118,8 +116,6 @@ def fetch_stats(ch, source: str) -> dict | None:
 
     total_events = int(total_events or 0)
     total_acteurs = int(total_acteurs or 0)
-    nb_replies = int(nb_replies or 0)
-    nb_in_thread = int(nb_in_thread or 0)
     nb_help = int(nb_help or 0)
     nb_resolved = int(nb_resolved or 0)
 
@@ -129,13 +125,6 @@ def fetch_stats(ch, source: str) -> dict | None:
         "dau_moyen": round(float(dau_moyen or 0), 2),
         "avg_events_per_user": (
             round(total_events / total_acteurs, 2) if total_acteurs > 0 else 0.0
-        ),
-        "reply_rate": round(nb_replies / total_events, 4) if total_events > 0 else 0.0,
-        "thread_rate": (
-            round(nb_in_thread / total_events, 4) if total_events > 0 else 0.0
-        ),
-        "help_request_rate": (
-            round(nb_help / total_events, 4) if total_events > 0 else 0.0
         ),
         "resolution_rate": round(nb_resolved / nb_help, 4) if nb_help > 0 else 0.0,
         "first_event_ts": first_event_ts,
@@ -237,9 +226,6 @@ def main() -> None:
                         stats["total_acteurs"],
                         stats["dau_moyen"],
                         stats["avg_events_per_user"],
-                        stats["reply_rate"],
-                        stats["thread_rate"],
-                        stats["help_request_rate"],
                         stats["resolution_rate"],
                         stats["first_event_ts"],
                         stats["last_event_ts"],
@@ -247,6 +233,7 @@ def main() -> None:
                         raw_count,
                         curated_size,
                         curated_count,
+                        staging_rows,
                         staging_size,
                     )
                 )
@@ -269,20 +256,17 @@ def main() -> None:
                 INSERT INTO {PG_SCHEMA}.stats_globales
                     (period_start, period_end, source,
                      total_events, total_acteurs, dau_moyen, avg_events_per_user,
-                     reply_rate, thread_rate, help_request_rate, resolution_rate,
+                     resolution_rate,
                      first_event_ts, last_event_ts,
                      raw_size_bytes, raw_file_count,
                      curated_size_bytes, curated_file_count,
-                     staging_size_bytes)
+                     staging_rows, staging_size_bytes)
                 VALUES %s
                 ON CONFLICT (period_end, source) DO UPDATE SET
                     total_events        = EXCLUDED.total_events,
                     total_acteurs       = EXCLUDED.total_acteurs,
                     dau_moyen           = EXCLUDED.dau_moyen,
                     avg_events_per_user = EXCLUDED.avg_events_per_user,
-                    reply_rate          = EXCLUDED.reply_rate,
-                    thread_rate         = EXCLUDED.thread_rate,
-                    help_request_rate   = EXCLUDED.help_request_rate,
                     resolution_rate     = EXCLUDED.resolution_rate,
                     first_event_ts      = EXCLUDED.first_event_ts,
                     last_event_ts       = EXCLUDED.last_event_ts,
@@ -290,6 +274,7 @@ def main() -> None:
                     raw_file_count      = EXCLUDED.raw_file_count,
                     curated_size_bytes  = EXCLUDED.curated_size_bytes,
                     curated_file_count  = EXCLUDED.curated_file_count,
+                    staging_rows        = EXCLUDED.staging_rows,
                     staging_size_bytes  = EXCLUDED.staging_size_bytes,
                     computed_at         = NOW()
             """,

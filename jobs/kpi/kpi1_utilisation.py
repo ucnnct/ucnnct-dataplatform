@@ -16,7 +16,7 @@ taux_fonctionnel
     |{actor_id | event_type ≠ NULL ∧ event_ts ∈ jour}| / |{actor_id | event_ts ∈ jour}|
 
 freq_moyenne
-    |{(actor_id, DATE(event_ts))}| / |{actor_id}|
+    count() / |{actor_id | event_ts ∈ jour}|   — événements moyens par utilisateur actif par jour
 
 Lecture  : ClickHouse staging (table events)
 Écriture : PostgreSQL {POSTGRES_SCHEMA}.kpi1_utilisation — une ligne par (jour, source)
@@ -66,7 +66,7 @@ SELECT
     uniq(actor_id) / nb_inscrits_total                                                  AS taux_actifs,
     uniqIf(actor_id, isNotNull(thread_id)) / nullIf(uniq(actor_id), 0)                 AS taux_participation,
     uniqIf(actor_id, event_type IN ({ACTIVE_TYPES})) / nullIf(uniq(actor_id), 0)       AS taux_fonctionnel,
-    uniq(actor_id, toDate(event_ts)) / nullIf(nb_inscrits_total, 0)                    AS freq_moyenne
+    count() / nullIf(uniq(actor_id), 0)                                                 AS freq_moyenne
 FROM events
 JOIN base_total USING (source)
 GROUP BY jour, source, nb_inscrits_total
@@ -83,7 +83,7 @@ SELECT
     uniq(actor_id) / nb_inscrits_total                                                  AS taux_actifs,
     uniqIf(actor_id, isNotNull(thread_id)) / nullIf(uniq(actor_id), 0)                 AS taux_participation,
     uniqIf(actor_id, event_type IN ({ACTIVE_TYPES})) / nullIf(uniq(actor_id), 0)       AS taux_fonctionnel,
-    uniq(actor_id, toDate(event_ts)) / nullIf(nb_inscrits_total, 0)                    AS freq_moyenne
+    count() / nullIf(uniq(actor_id), 0)                                                 AS freq_moyenne
 FROM events
 CROSS JOIN base_total
 GROUP BY jour, nb_inscrits_total

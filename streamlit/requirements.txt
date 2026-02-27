@@ -1,0 +1,5 @@
+streamlit==1.32.0
+psycopg2-binary
+clickhouse-connect
+pandas
+plotly

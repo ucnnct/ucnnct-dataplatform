@@ -45,6 +45,25 @@ services:
       timeout: 5s
       retries: 5
 
+  streamlit:
+    build: ./streamlit
+    container_name: uconnect-streamlit
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:8501:8501"
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: ${POSTGRES_DB}
+      PG_USER: ${POSTGRES_USER}
+      PG_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_SCHEMA: datamart
+    networks:
+      - uconnect-net
+    restart: unless-stopped
+
   superset:
     image: apache/superset:latest-dev
     container_name: uconnect-superset
